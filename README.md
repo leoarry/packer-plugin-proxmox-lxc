@@ -66,7 +66,7 @@ source "proxmox-lxc" "ubuntu" {
   # LXC template
   template     = "local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst"
   storage      = "local-lvm"
-  memory       = 1024
+  memory       = 2048
   cores        = 2
 
   # Backup settings
@@ -117,13 +117,13 @@ packer build template.pkr.hcl
 | `ssh_port` | int | `22` | SSH port |
 | `storage` | string | `"local-lvm"` | Storage for the container |
 | `bridge` | string | `"vmbr0"` | Network bridge |
-| `memory` | int | `1024` | Memory in MB |
+| `memory` | int | `2048` | Memory in MB |
 | `cores` | int | `2` | Number of CPU cores |
 | `root_password` | string | `"changeme"` | Root password for the container |
 | `unprivileged` | bool | `true` | Create unprivileged container |
 | `features` | string | `"nesting=1"` | LXC features (e.g., `nesting=1,keyctl=1`) |
-| `rootfs_size` | string | `"2"` | Root filesystem size in GB |
-| `backup_name` | string | auto-generated | Name for the backup/template |
+| `rootfs_size` | string | `"8"` | Root filesystem size in GB |
+| `backup_name` | string | auto-generated | Name for the backup/template. Supports HCL2 template functions like `timestamp()` and `formatdate()` for dynamic naming, e.g., `"my-template_${formatdate("2006-01-02_15-04", timestamp())}_debian_12.7-1_amd64"` |
 | `backup_dir` | string | `"/var/lib/vz/template/cache"` | Backup destination directory |
 | `ctid` | string | auto-assigned | Specific CTID to use |
 | `lxc_config` | string | - | Additional LXC config to merge |

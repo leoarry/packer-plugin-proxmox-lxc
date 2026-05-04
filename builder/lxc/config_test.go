@@ -240,7 +240,6 @@ func TestConfig_Prepare_Defaults(t *testing.T) {
 		SSHUser:     "root@pam",
 		SSHPassword: "secret",
 		Template:    "local:vztmpl/ubuntu-22.04.tar.gz",
-		RootfsSize:  "2",
 		Unprivileged: true, // Set explicitly since mapstructure default not applied when creating directly
 	}
 
@@ -259,8 +258,11 @@ func TestConfig_Prepare_Defaults(t *testing.T) {
 	if config.Bridge != "vmbr0" {
 		t.Errorf("Expected default Bridge 'vmbr0', got %s", config.Bridge)
 	}
-	if config.Memory != 1024 {
-		t.Errorf("Expected default Memory 1024, got %d", config.Memory)
+	if config.Memory != 2048 {
+		t.Errorf("Expected default Memory 2048, got %d", config.Memory)
+	}
+	if config.RootfsSize != "8" {
+		t.Errorf("Expected default RootfsSize '8', got %s", config.RootfsSize)
 	}
 	if config.Cores != 2 {
 		t.Errorf("Expected default Cores 2, got %d", config.Cores)

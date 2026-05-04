@@ -86,12 +86,12 @@ type Config struct {
 	Template     string `mapstructure:"template" required:"true"`
 	Storage      string `mapstructure:"storage" default:"local-lvm"`
 	Bridge       string `mapstructure:"bridge" default:"vmbr0"`
-	Memory       int    `mapstructure:"memory" default:"1024"`
+	Memory       int    `mapstructure:"memory" default:"2048"`
 	Cores        int    `mapstructure:"cores" default:"2"`
 	RootPassword string `mapstructure:"root_password" default:"changeme"`
 	Unprivileged bool   `mapstructure:"unprivileged" default:"true"`
 	Features     string `mapstructure:"features" default:"nesting=1"`
-	RootfsSize   string `mapstructure:"rootfs_size" default:"2"`
+	RootfsSize   string `mapstructure:"rootfs_size" default:"8"`
 
 	// Build settings.
 	BackupName   string `mapstructure:"backup_name"`
@@ -118,7 +118,7 @@ func (c *Config) applyDefaults() {
 		c.Bridge = "vmbr0"
 	}
 	if c.Memory == 0 {
-		c.Memory = 1024
+		c.Memory = 2048
 	}
 	if c.Cores == 0 {
 		c.Cores = 2
@@ -130,7 +130,7 @@ func (c *Config) applyDefaults() {
 		c.Features = "nesting=1"
 	}
 	if c.RootfsSize == "" {
-		c.RootfsSize = "2"
+		c.RootfsSize = "8"
 	}
 	if c.BackupDir == "" {
 		c.BackupDir = "/var/lib/vz/template/cache"

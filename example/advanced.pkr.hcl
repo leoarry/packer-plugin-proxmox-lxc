@@ -18,12 +18,12 @@ source "proxmox-lxc" "debian" {
   template      = "local:vztmpl/debian-12-standard_12.0-1_amd64.tar.zst"
   storage       = "local-lvm"
   bridge        = "vmbr0"
-  memory        = 2048
+  memory        = 4096
   cores         = 2
   root_password = "changeme"
   unprivileged  = true
   features      = "nesting=1,keyctl=1"
-  rootfs_size   = "8"
+  rootfs_size   = "16"
 
   # Custom LXC config
   lxc_config = <<-EOF
@@ -31,8 +31,8 @@ source "proxmox-lxc" "debian" {
     lxc.mount.entry: /dev/net dev/net none bind,create=dir
   EOF
 
-  # Backup settings
-  backup_name = "debian-node-template"
+  # Backup settings (supports HCL2 templating for dynamic names)
+  backup_name = "debian-node_${formatdate("2006-01-02_15-04", timestamp())}"
   backup_dir  = "/var/lib/vz/template/cache"
   ctid        = "100"  # Use specific CTID
 

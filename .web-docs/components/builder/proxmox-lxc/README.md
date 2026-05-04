@@ -39,7 +39,7 @@ source "proxmox-lxc" "ubuntu" {
   # LXC template to use as base
   template = "local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst"
   storage  = "local-lvm"
-  memory   = 1024
+  memory   = 2048
   cores    = 2
 
   # Backup settings
@@ -89,6 +89,8 @@ described.
 
 - `backup_name` (string) - Name for the resulting backup/template file.
   If not set, a name is auto-generated from the CTID and timestamp.
+  Supports HCL2 template functions like `timestamp()` and `formatdate()` for
+  dynamic naming, e.g., `"my-template_${formatdate("2006-01-02_15-04", timestamp())}_debian_12.7-1_amd64"`
 
 - `bridge` (string) - Network bridge for the container.
   Default: `"vmbr0"`
@@ -106,14 +108,14 @@ described.
   container configuration.
 
 - `memory` (int) - Memory in MB for the container.
-  Default: `1024`
+  Default: `2048`
 
 - `root_password` (string) - Root password for the container.
   Default: `"changeme"`
 
 - `rootfs_size` (string) - Root filesystem size. Accepts plain numbers
   (GB) or values with units like `2GB`, `2048MB`, `1TB`.
-  Default: `"2"` (2 GB)
+  Default: `"8"` (8 GB)
 
 - `ssh_port` (int) - SSH port for connecting to the Proxmox host.
   Default: `22`
