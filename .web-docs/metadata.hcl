@@ -1,5 +1,5 @@
 # Copyright (c) 2024
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: MIT
 
 # For full specification on the configuration of this file visit:
 # https://github.com/hashicorp/integration-template#metadata-configuration
@@ -14,7 +14,7 @@ integration {
     external_url = "https://github.com/leoarry/packer-plugin-proxmox-lxc"
   }
   license {
-    type = "MPL-2.0"
+    type = "MIT"
     url = "https://github.com/leoarry/packer-plugin-proxmox-lxc/blob/main/LICENSE"
   }
   component {
