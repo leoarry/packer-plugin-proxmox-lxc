@@ -1,0 +1,25 @@
+{
+  "name": "packer-plugin-dev",
+  "image": "leoarry/packer-plugin-devcontainer:latest",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "hashicorp.hcl",
+        "github.vscode-github-actions"
+      ],
+      "settings": {
+        "go.toolsManagement.checkForUpdates": "off",
+        "go.useLanguageServer": true
+      }
+    }
+  },
+  "mounts": [
+    "source=packer-plugin-gomod,target=/go/pkg/mod,type=volume",
+    "source=${localEnv:USERPROFILE}/.config/packer/plugins,target=/root/.config/packer/plugins,type=bind,consistency=cached"
+  ],
+  "remoteEnv": {
+    "PACKER_PLUGIN_PATH": "/root/.config/packer/plugins",
+    "ANTHROPIC_AUTH_TOKEN": "${localEnv:OPENROUTER_APIKEY}"
+  }
+}

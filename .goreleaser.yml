@@ -1,0 +1,36 @@
+version: 2
+
+project_name: packer-plugin-proxmox-lxc
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    main: ./
+    binary: packer-plugin-proxmox-lxc
+    ldflags:
+      - "-s -w -X github.com/leoarry/packer-plugin-proxmox-lxc/version.Version={{.Version}}"
+
+archives:
+  - format: zip
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ title .Os }}_{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ .Tag }}-next"
+
+release:
+  disable: false
+  prerelease: auto
