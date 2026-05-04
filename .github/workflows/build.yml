@@ -10,18 +10,14 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: [1.25]
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go ${{ matrix.go-version }}
+      - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version: 1.24
           cache: true
 
       - name: Download dependencies
@@ -34,10 +30,9 @@ jobs:
         run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage
-        if: matrix.go-version == '1.23'
         uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.txt
+          files: ./coverage.txt
           fail_ci_if_error: false
 
   lint:
@@ -50,7 +45,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.25
+          go-version: 1.24
           cache: true
 
       - name: Run golangci-lint

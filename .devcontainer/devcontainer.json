@@ -14,10 +14,6 @@
       }
     }
   },
-  "mounts": [
-    "source=packer-plugin-gomod,target=/go/pkg/mod,type=volume",
-    "source=${localEnv:USERPROFILE}/.config/packer/plugins,target=/root/.config/packer/plugins,type=bind,consistency=cached"
-  ],
   "remoteEnv": {
     "PACKER_PLUGIN_PATH": "/root/.config/packer/plugins",
     "ANTHROPIC_AUTH_TOKEN": "${localEnv:OPENROUTER_APIKEY}"

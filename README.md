@@ -185,38 +185,6 @@ make test    # Run tests
 make build   # Build binary
 ```
 
-## Project Structure
-
-```
-packer-plugin-proxmox-lxc/
-├── main.go                 # Plugin entry point
-├── Makefile                # Build and test targets
-├── .goreleaser.yml       # Release automation
-├── builder/
-│   └── lxc/
-│       ├── builder.go             # Builder implementation
-│       ├── config.go              # Configuration struct
-│       ├── config.hcl2spec.go      # HCL2 spec (auto-generated)
-│       ├── communicator.go         # SSH communicator implementations
-│       ├── run_command.go          # Helper functions
-│       ├── step_connect.go         # Connect to Proxmox host
-│       ├── step_get_ctid.go       # Get next available CTID
-│       ├── step_create_container.go  # Create LXC container
-│       ├── step_merge_config.go    # Merge custom LXC config
-│       ├── step_start_container.go  # Start container
-│       ├── step_setup_container_comm.go  # Setup container communicator
-│       ├── step_backup_container.go   # Backup container via vzdump
-│       ├── step_destroy_container.go  # Destroy container
-│       └── artifact.go            # Artifact implementation
-├── version/
-│   └── version.go        # Version info
-├── tests/
-│   └── lxc/             # Test files
-├── example/               # Example configurations
-└── .github/
-    └── workflows/        # CI/CD workflows
-```
-
 ## Releasing
 
 Push a tag to trigger the release workflow:
