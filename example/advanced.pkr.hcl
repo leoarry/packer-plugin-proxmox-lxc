@@ -27,8 +27,8 @@ source "proxmox-lxc" "debian" {
 
   # Custom LXC config
   lxc_config = <<-EOF
-    lxc.apparmor.profile = unconfined
-    lxc.mount.auto = proc:rw sys:rw
+    lxc.cgroup2.devices.allow: c 10:200 rwm
+    lxc.mount.entry: /dev/net dev/net none bind,create=dir
   EOF
 
   # Backup settings
