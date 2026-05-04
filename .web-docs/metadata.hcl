@@ -6,7 +6,7 @@
 integration {
   name = "Proxmox LXC"
   description = "Build LXC container templates on Proxmox VE with HashiCorp Packer."
-  identifier = "github.com/leoarry/proxmox-lxc"
+  identifier = "packer/leoarry/proxmox-lxc"
   flags = ["hcp-ready"]
   docs {
     process_docs = true

@@ -26,12 +26,12 @@ type FlatConfig struct {
 	Template            *string           `mapstructure:"template" required:"true" cty:"template" hcl:"template"`
 	Storage             *string           `mapstructure:"storage" default:"local-lvm" cty:"storage" hcl:"storage"`
 	Bridge              *string           `mapstructure:"bridge" default:"vmbr0" cty:"bridge" hcl:"bridge"`
-	Memory              *int              `mapstructure:"memory" default:"1024" cty:"memory" hcl:"memory"`
+	Memory              *int              `mapstructure:"memory" default:"2048" cty:"memory" hcl:"memory"`
 	Cores               *int              `mapstructure:"cores" default:"2" cty:"cores" hcl:"cores"`
 	RootPassword        *string           `mapstructure:"root_password" default:"changeme" cty:"root_password" hcl:"root_password"`
 	Unprivileged        *bool             `mapstructure:"unprivileged" default:"true" cty:"unprivileged" hcl:"unprivileged"`
 	Features            *string           `mapstructure:"features" default:"nesting=1" cty:"features" hcl:"features"`
-	RootfsSize          *string           `mapstructure:"rootfs_size" default:"2" cty:"rootfs_size" hcl:"rootfs_size"`
+	RootfsSize          *string           `mapstructure:"rootfs_size" default:"8" cty:"rootfs_size" hcl:"rootfs_size"`
 	BackupName          *string           `mapstructure:"backup_name" cty:"backup_name" hcl:"backup_name"`
 	BackupDir           *string           `mapstructure:"backup_dir" default:"/var/lib/vz/template/cache" cty:"backup_dir" hcl:"backup_dir"`
 	CTID                *string           `mapstructure:"ctid" cty:"ctid" hcl:"ctid"`

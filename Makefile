@@ -9,8 +9,9 @@ LDFLAGS=-ldflags="-s -w -X github.com/leoarry/packer-plugin-proxmox-lxc/version.
 
 # Packer plugin installation directory
 PACKER_PLUGIN_DIR?=$(HOME)/.config/packer/plugins
+HASHICORP_PACKER_PLUGIN_SDK_VERSION?=$(shell $(GO) list -m github.com/hashicorp/packer-plugin-sdk | cut -d ' ' -f2)
 
-.PHONY: all build clean test lint fmt check-fmt deps install install-plugin generate
+.PHONY: all build clean test lint fmt check-fmt deps install install-plugin generate install-packer-sdc
 
 all: build
 
@@ -49,8 +50,16 @@ deps:
 	$(GO) mod download
 	$(GO) mod tidy
 
-generate:
-	cd builder/lxc && $(GO) generate
+install-packer-sdc:
+	$(GO) install github.com/hashicorp/packer-plugin-sdk/cmd/packer-sdc@$(HASHICORP_PACKER_PLUGIN_SDK_VERSION)
+
+generate: install-packer-sdc
+	$(GO) generate ./...
+	rm -rf .docs
+	packer-sdc renderdocs -src docs -partials docs-partials/ -dst .docs/
+	chmod +x ./.web-docs/scripts/compile-to-webdocs.sh
+	./.web-docs/scripts/compile-to-webdocs.sh "." ".docs" ".web-docs" "leoarry"
+	rm -r ".docs"
 
 release:
 	goreleaser release --clean
