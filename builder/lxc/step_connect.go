@@ -59,7 +59,7 @@ func (s *stepConnect) Run(ctx context.Context, state multistep.StateBag) multist
 func (s *stepConnect) Cleanup(state multistep.StateBag) {
 	if client, ok := state.GetOk("ssh_client"); ok {
 		if c, ok := client.(*ssh.Client); ok {
-			c.Close()
+			_ = c.Close()
 		}
 	}
 }

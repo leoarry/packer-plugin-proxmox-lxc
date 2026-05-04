@@ -126,7 +126,7 @@ func (s *mockSSHSession) Run(cmd string) error {
 	}
 	// Simulate writing to stdout
 	if s.stdoutW != nil {
-		s.stdoutW.Write(s.output)
+		_, _ = s.stdoutW.Write(s.output)
 	} else {
 		s.stdout.Write(s.output)
 	}

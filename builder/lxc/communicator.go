@@ -34,7 +34,7 @@ func (c *sshCommunicator) RunCommand(ctx context.Context, command string) (strin
 	if err != nil {
 		return "", fmt.Errorf("failed to create SSH session: %w", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	var stdout bytes.Buffer
 	session.SetStdout(&stdout)
@@ -54,7 +54,7 @@ func (c *sshCommunicator) Start(ctx context.Context, cmd *packersdk.RemoteCmd) e
 	if err != nil {
 		return fmt.Errorf("failed to create SSH session: %w", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	var stdout, stderr bytes.Buffer
 	session.SetStdout(&stdout)

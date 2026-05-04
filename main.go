@@ -11,5 +11,7 @@ func main() {
 	set := plugin.NewSet()
 	set.SetVersion(version.PluginVersion)
 	set.RegisterBuilder(plugin.DEFAULT_NAME, &lxc.Builder{})
-	set.Run()
+	if err := set.Run(); err != nil {
+		panic(err)
+	}
 }
