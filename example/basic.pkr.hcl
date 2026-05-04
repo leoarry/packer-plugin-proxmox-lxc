@@ -16,10 +16,6 @@ source "proxmox-lxc" "basic" {
 
   # LXC template
   template     = "local:vztmpl/debian-12-standard_12.0-1_amd64.tar.zst"
-  root_password = "changeme"
-
-  # Backup settings
-  backup_name = "basic-test-template"
 }
 
 build {
