@@ -1,6 +1,6 @@
 {
   "name": "packer-plugin-dev",
-  "image": "leoarry/packer-plugin-devcontainer:latest",
+  "image": "leoarry/hashicorp-plugin-devcontainer:latest",
   "customizations": {
     "vscode": {
       "extensions": [
