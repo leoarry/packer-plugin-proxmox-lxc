@@ -8,7 +8,7 @@ BUILD_TIME?=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS=-ldflags="-s -w -X github.com/leoarry/packer-plugin-proxmox-lxc/version.Version=0.1.0 -X github.com/leoarry/packer-plugin-proxmox-lxc/version.BuildTime=$(BUILD_TIME)"
 
 # Packer plugin installation directory
-PACKER_PLUGIN_DIR?=$(HOME)/.packer.d/plugins
+PACKER_PLUGIN_DIR?=$(HOME)/.config/packer/plugins
 
 .PHONY: all build clean test lint fmt check-fmt deps install install-plugin generate
 

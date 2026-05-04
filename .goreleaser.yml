@@ -13,20 +13,20 @@ builds:
       - amd64
       - arm64
     main: ./
-    binary: packer-plugin-proxmox-lxc
+    binary: packer-plugin-proxmox-lxc_{{ .Version }}_x5.0_{{ .Os }}_{{ .Arch }}
     ldflags:
       - "-s -w -X github.com/leoarry/packer-plugin-proxmox-lxc/version.Version={{.Version}}"
 
 archives:
   - format: zip
     name_template: >-
-      {{ .ProjectName }}_{{ .Version }}_{{ title .Os }}_{{ .Arch }}
+      {{ .ProjectName }}_{{ .Version }}_x5.0_{{ .Os }}_{{ .Arch }}
     format_overrides:
       - goos: windows
         format: zip
 
 checksum:
-  name_template: 'checksums.txt'
+  name_template: '{{ .ProjectName }}_{{ .Version }}_x5.0_SHA256SUMS'
 
 snapshot:
   version_template: "{{ .Tag }}-next"
