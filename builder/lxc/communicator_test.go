@@ -6,8 +6,8 @@ import (
 	"errors"
 	"testing"
 
-	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
+	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -57,9 +57,11 @@ func Test_pctExecCommunicator_Start(t *testing.T) {
 			cmd := &packersdk.RemoteCmd{
 				Command: "echo hello",
 			}
-			err := comm.Start(context.Background(), cmd)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Start() error = %v, wantErr %v", err, tt.wantErr)
+			_ = comm.Start(context.Background(), cmd)
+			// Wait for command to complete and check error
+			waitErr := comm.Wait(cmd)
+			if (waitErr != nil) != tt.wantErr {
+				t.Errorf("Wait() error = %v, wantErr %v", waitErr, tt.wantErr)
 			}
 		})
 	}
@@ -88,12 +90,12 @@ func Test_pctExecCommunicator_Start_CommandEscaping(t *testing.T) {
 // Test_pctExecCommunicator_Upload tests the Upload method
 func Test_pctExecCommunicator_Upload(t *testing.T) {
 	tests := []struct {
-		name          string
-		dst           string
-		src           string
-		mockOutputs   []string
-		mockErrors    []error
-		wantErr       bool
+		name        string
+		dst         string
+		src         string
+		mockOutputs []string
+		mockErrors  []error
+		wantErr     bool
 	}{
 		{
 			name:        "successful upload",
@@ -101,7 +103,7 @@ func Test_pctExecCommunicator_Upload(t *testing.T) {
 			src:         "config data",
 			mockOutputs: []string{"", "", ""}, // write temp, pct push, rm
 			mockErrors:  []error{nil, nil, nil},
-			wantErr:      false,
+			wantErr:     false,
 		},
 		{
 			name:        "read source error",
@@ -109,7 +111,7 @@ func Test_pctExecCommunicator_Upload(t *testing.T) {
 			src:         "config data",
 			mockOutputs: []string{},
 			mockErrors:  []error{},
-			wantErr:      true, // Will fail on io.ReadAll if we use a bad reader
+			wantErr:     true, // Will fail on io.ReadAll if we use a bad reader
 		},
 	}
 
@@ -195,11 +197,10 @@ func Test_pctExecCommunicator_DownloadDir(t *testing.T) {
 // Test_sshCommunicator_RunCommand tests the RunCommand method
 func Test_sshCommunicator_RunCommand(t *testing.T) {
 	tests := []struct {
-		name      string
-		output    []byte
-		outputErr error
-		runErr    error
-		wantErr   bool
+		name    string
+		output  []byte
+		runErr  error
+		wantErr bool
 	}{
 		{
 			name:    "successful command",
@@ -226,12 +227,13 @@ func Test_sshCommunicator_RunCommand(t *testing.T) {
 				client: mockProvider,
 			}
 
-			result, err := comm.RunCommand(context.Background(), "echo test")
+			var stdout bytes.Buffer
+			err := comm.RunCommand(context.Background(), "echo test", &stdout, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("RunCommand() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if !tt.wantErr && result != string(tt.output) {
-				t.Errorf("RunCommand() = %v, want %v", result, string(tt.output))
+			if !tt.wantErr && stdout.String() != string(tt.output) {
+				t.Errorf("RunCommand() = %v, want %v", stdout.String(), string(tt.output))
 			}
 		})
 	}
@@ -271,9 +273,11 @@ func Test_sshCommunicator_Start(t *testing.T) {
 			cmd := &packersdk.RemoteCmd{
 				Command: "echo test",
 			}
-			err := comm.Start(context.Background(), cmd)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Start() error = %v, wantErr %v", err, tt.wantErr)
+			_ = comm.Start(context.Background(), cmd)
+			// Wait for command to complete and check error
+			waitErr := comm.Wait(cmd)
+			if (waitErr != nil) != tt.wantErr {
+				t.Errorf("Wait() error = %v, wantErr %v", waitErr, tt.wantErr)
 			}
 		})
 	}

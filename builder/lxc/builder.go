@@ -4,17 +4,17 @@ import (
 	"context"
 	"fmt"
 
-	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
+	hcldec "github.com/hashicorp/hcl/v2/hcldec"
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	"github.com/hashicorp/packer-plugin-sdk/multistep/commonsteps"
-	hcldec "github.com/hashicorp/hcl/v2/hcldec"
+	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 )
 
 // Builder implements packersdk.Builder for Proxmox LXC template creation.
 type Builder struct {
-	config  Config
-	runner  multistep.Runner
-	steps   []multistep.Step // injectable for testing
+	config Config
+	runner multistep.Runner
+	steps  []multistep.Step // injectable for testing
 }
 
 // Ensure Builder implements packersdk.Builder.

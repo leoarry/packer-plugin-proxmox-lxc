@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
+	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 )
 
 type stepStartContainer struct{}
@@ -18,7 +18,7 @@ func (s *stepStartContainer) Run(ctx context.Context, state multistep.StateBag) 
 
 	ui.Say(fmt.Sprintf("Starting container %s...", ctid))
 
-	_, err := comm.RunCommand(ctx, fmt.Sprintf("pct start %s", ctid))
+	err := comm.RunCommand(ctx, fmt.Sprintf("pct start %s", ctid), nil, nil)
 	if err != nil {
 		state.Put("error", fmt.Errorf("failed to start container: %w", err))
 		return multistep.ActionHalt

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
+	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 )
 
 type stepCreateContainer struct{}
@@ -16,7 +16,7 @@ func (s *stepCreateContainer) Run(ctx context.Context, state multistep.StateBag)
 	comm := state.Get("communicator").(CommandRunner)
 	ctid := state.Get("ctid").(string)
 
-	_, err := comm.RunCommand(ctx, fmt.Sprintf("pct status %s", ctid))
+	err := comm.RunCommand(ctx, fmt.Sprintf("pct status %s", ctid), nil, nil)
 	if err == nil {
 		ui.Say(fmt.Sprintf("Container %s already exists, reusing", ctid))
 		state.Put("container_reused", true)
@@ -47,7 +47,7 @@ func (s *stepCreateContainer) Run(ctx context.Context, state multistep.StateBag)
 		config.RootPassword,
 	)
 
-	_, err = comm.RunCommand(ctx, cmd)
+	err = comm.RunCommand(ctx, cmd, nil, nil)
 	if err != nil {
 		state.Put("error", fmt.Errorf("pct create failed: %w", err))
 		return multistep.ActionHalt

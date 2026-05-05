@@ -2,14 +2,15 @@ package lxc
 
 import (
 	"context"
+	"io"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 )
 
-// CommandRunner is an interface for running commands and returning output.
+// CommandRunner is an interface for running commands.
 // It is implemented by sshCommunicator and can be mocked for testing.
 type CommandRunner interface {
-	RunCommand(ctx context.Context, command string) (string, error)
+	RunCommand(ctx context.Context, command string, stdout, stderr io.Writer) error
 }
 
 // Helper to check if a step should halt.

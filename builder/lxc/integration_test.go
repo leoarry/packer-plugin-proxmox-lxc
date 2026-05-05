@@ -105,14 +105,14 @@ func TestIntegration_FullBuild(t *testing.T) {
 	t.Skip("Full build integration test not yet enabled")
 
 	config := map[string]interface{}{
-		"ssh_host":      host,
-		"ssh_user":      os.Getenv("PROXMOX_USER"),
-		"ssh_password":  os.Getenv("PROXMOX_PASSWORD"),
-		"ssh_key_path":  os.Getenv("PROXMOX_KEY_PATH"),
-		"template":      template,
-		"storage":       os.Getenv("PROXMOX_STORAGE"),
-		"backup_dir":    "/var/lib/vz/template/cache",
-		"rootfs_size":   "2",
+		"ssh_host":     host,
+		"ssh_user":     os.Getenv("PROXMOX_USER"),
+		"ssh_password": os.Getenv("PROXMOX_PASSWORD"),
+		"ssh_key_path": os.Getenv("PROXMOX_KEY_PATH"),
+		"template":     template,
+		"storage":      os.Getenv("PROXMOX_STORAGE"),
+		"backup_dir":   "/var/lib/vz/template/cache",
+		"rootfs_size":  "2",
 	}
 
 	b := &Builder{}

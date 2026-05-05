@@ -5,21 +5,21 @@ import (
 	"io"
 	"testing"
 
-	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
+	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 )
 
 // testUi is a simple mock UI for testing
 type testUi struct{}
 
-func (u *testUi) Say(message string)                                  {}
-func (u *testUi) Sayf(format string, args ...interface{})               {}
-func (u *testUi) Message(message string)                               {}
-func (u *testUi) Error(message string)                                 {}
-func (u *testUi) Errorf(format string, args ...interface{})            {}
-func (u *testUi) Ask(query string) (string, error)                    { return "", nil }
+func (u *testUi) Say(message string)                                      {}
+func (u *testUi) Sayf(format string, args ...interface{})                 {}
+func (u *testUi) Message(message string)                                  {}
+func (u *testUi) Error(message string)                                    {}
+func (u *testUi) Errorf(format string, args ...interface{})               {}
+func (u *testUi) Ask(query string) (string, error)                        { return "", nil }
 func (u *testUi) Askf(format string, args ...interface{}) (string, error) { return "", nil }
-func (u *testUi) Machine(name string, args ...string)                         {}
+func (u *testUi) Machine(name string, args ...string)                     {}
 func (u *testUi) TrackProgress(src string, currentSize, totalSize int64, stream io.ReadCloser) io.ReadCloser {
 	return stream
 }
@@ -262,7 +262,7 @@ func TestStepCreateContainer_Create(t *testing.T) {
 		RootfsSize:   "2",
 		RootPassword: "test123",
 		Bridge:       "vmbr0",
-		Features:      "nesting=1",
+		Features:     "nesting=1",
 		Template:     "local:vztmpl/ubuntu-22.04.tar.gz",
 	}
 	ui := &testUi{}

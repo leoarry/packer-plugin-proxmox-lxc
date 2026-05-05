@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
+	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 )
 
 func TestBuilder_Implements(t *testing.T) {
@@ -22,16 +22,16 @@ func TestBuilder_Prepare(t *testing.T) {
 			name: "valid config with password",
 			raw: []interface{}{
 				map[string]interface{}{
-					"ssh_host":      "192.168.1.100",
-					"ssh_port":      22,
-					"ssh_user":      "root@pam",
-					"ssh_password":  "secret",
-					"template":      "local:vztmpl/ubuntu-22.04.tar.gz",
-					"storage":       "local-lvm",
-					"memory":        1024,
-					"cores":         2,
-					"rootfs_size":   "2",
-					"ssh_timeout":   "5m",
+					"ssh_host":     "192.168.1.100",
+					"ssh_port":     22,
+					"ssh_user":     "root@pam",
+					"ssh_password": "secret",
+					"template":     "local:vztmpl/ubuntu-22.04.tar.gz",
+					"storage":      "local-lvm",
+					"memory":       1024,
+					"cores":        2,
+					"rootfs_size":  "2",
+					"ssh_timeout":  "5m",
 				},
 			},
 			wantErr: false,
@@ -237,9 +237,9 @@ func (s *mockStepProvision) Run(ctx context.Context, state multistep.StateBag) m
 func (s *mockStepProvision) Cleanup(state multistep.StateBag) {}
 
 type mockStepBackupContainer struct {
-	action      multistep.StepAction
-	backupPath  string
-	backupName  string
+	action     multistep.StepAction
+	backupPath string
+	backupName string
 }
 
 func (s *mockStepBackupContainer) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {

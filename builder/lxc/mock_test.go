@@ -19,9 +19,9 @@ type mockCommandRunner struct {
 	idx     int
 }
 
-func (m *mockCommandRunner) RunCommand(ctx context.Context, command string) (string, error) {
+func (m *mockCommandRunner) RunCommand(ctx context.Context, command string, stdout, stderr io.Writer) error {
 	if m.idx >= len(m.outputs) && m.idx >= len(m.errors) {
-		return "", nil
+		return nil
 	}
 
 	var out string
@@ -33,16 +33,20 @@ func (m *mockCommandRunner) RunCommand(ctx context.Context, command string) (str
 		err = m.errors[m.idx]
 	}
 	m.idx++
-	return out, err
+
+	if stdout != nil && out != "" {
+		_, _ = stdout.Write([]byte(out))
+	}
+	return err
 }
 
 // mockCommunicator implements Communicator for testing.
 // It records calls and returns configurable errors.
 type mockCommunicator struct {
-	commands []string          // Record of commands passed to Start()
-	uploads  []string          // Record of Upload calls
-	errOnStrat error             // Error to return on Start()
-	errOnUpload error             // Error to return on Upload()
+	commands    []string // Record of commands passed to Start()
+	uploads     []string // Record of Upload calls
+	errOnStrat  error    // Error to return on Start()
+	errOnUpload error    // Error to return on Upload()
 }
 
 func (m *mockCommunicator) Start(ctx context.Context, cmd *packersdk.RemoteCmd) error {
@@ -71,6 +75,10 @@ func (m *mockCommunicator) DownloadDir(src string, dst string, exclude []string)
 	return nil
 }
 
+func (m *mockCommunicator) Wait(*packersdk.RemoteCmd) error {
+	return nil
+}
+
 // mockPctExecCommunicator is a simplified pctExecCommunicator for testing.
 // It uses a CommandRunner for the parent to allow mocking.
 type mockPctExecCommunicator struct {
@@ -93,7 +101,7 @@ func (m *mockPctExecCommunicator) Upload(dst string, src io.Reader, fi *os.FileI
 		return err
 	}
 	_ = data
-	_, err = m.parent.RunCommand(context.Background(), fmt.Sprintf("pct push %s %s %s", m.ctid, "/tmp/packer-upload", dst))
+	err = m.parent.RunCommand(context.Background(), fmt.Sprintf("pct push %s %s %s", m.ctid, "/tmp/packer-upload", dst), nil, nil)
 	return err
 }
 
@@ -106,6 +114,10 @@ func (m *mockPctExecCommunicator) Download(src string, dst io.Writer) error {
 }
 
 func (m *mockPctExecCommunicator) DownloadDir(src string, dst string, exclude []string) error {
+	return nil
+}
+
+func (m *mockPctExecCommunicator) Wait(*packersdk.RemoteCmd) error {
 	return nil
 }
 

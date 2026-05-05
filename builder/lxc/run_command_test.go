@@ -27,9 +27,9 @@ func TestStepHalt_WithNilError(t *testing.T) {
 
 func TestStepHalt_WithError(t *testing.T) {
 	tests := []struct {
-		name      string
-		errorVal  interface{}
-		wantHalt  multistep.StepAction
+		name     string
+		errorVal interface{}
+		wantHalt multistep.StepAction
 	}{
 		{
 			name:     "string error",

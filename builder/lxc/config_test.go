@@ -31,16 +31,16 @@ func TestConfig_Prepare(t *testing.T) {
 		{
 			name: "valid config with ssh key",
 			config: &Config{
-				SSHHost:     "192.168.1.100",
-				SSHPort:     22,
-				SSHUser:     "root@pam",
-				SSHKeyPath:  "/path/to/key",
-				Template:    "local:vztmpl/ubuntu-22.04.tar.gz",
-				Storage:     "local-lvm",
-				Memory:      1024,
-				Cores:       2,
-				RootfsSize:  "2",
-				SSHTimeout:  "5m",
+				SSHHost:    "192.168.1.100",
+				SSHPort:    22,
+				SSHUser:    "root@pam",
+				SSHKeyPath: "/path/to/key",
+				Template:   "local:vztmpl/ubuntu-22.04.tar.gz",
+				Storage:    "local-lvm",
+				Memory:     1024,
+				Cores:      2,
+				RootfsSize: "2",
+				SSHTimeout: "5m",
 			},
 			wantErr: false,
 		},
@@ -191,17 +191,17 @@ func TestConfig_Prepare(t *testing.T) {
 		{
 			name: "valid config with unprivileged false",
 			config: &Config{
-				SSHHost:       "192.168.1.100",
-				SSHPort:       22,
-				SSHUser:       "root@pam",
-				SSHPassword:   "secret",
-				Template:      "local:vztmpl/ubuntu-22.04.tar.gz",
-				Storage:       "local-lvm",
-				Memory:        1024,
-				Cores:         2,
-				RootfsSize:    "2",
-				SSHTimeout:    "5m",
-				Unprivileged:  false,
+				SSHHost:      "192.168.1.100",
+				SSHPort:      22,
+				SSHUser:      "root@pam",
+				SSHPassword:  "secret",
+				Template:     "local:vztmpl/ubuntu-22.04.tar.gz",
+				Storage:      "local-lvm",
+				Memory:       1024,
+				Cores:        2,
+				RootfsSize:   "2",
+				SSHTimeout:   "5m",
+				Unprivileged: false,
 			},
 			wantErr: false,
 		},
@@ -236,10 +236,10 @@ func TestConfig_Prepare(t *testing.T) {
 
 func TestConfig_Prepare_Defaults(t *testing.T) {
 	config := &Config{
-		SSHHost:     "192.168.1.100",
-		SSHUser:     "root@pam",
-		SSHPassword: "secret",
-		Template:    "local:vztmpl/ubuntu-22.04.tar.gz",
+		SSHHost:      "192.168.1.100",
+		SSHUser:      "root@pam",
+		SSHPassword:  "secret",
+		Template:     "local:vztmpl/ubuntu-22.04.tar.gz",
 		Unprivileged: true, // Set explicitly since mapstructure default not applied when creating directly
 	}
 
@@ -284,11 +284,11 @@ func TestConfig_Prepare_Defaults(t *testing.T) {
 func TestConfig_Prepare_UnprivilegedDefault(t *testing.T) {
 	// Test that Unprivileged can be set to true when creating Config directly
 	config := &Config{
-		SSHHost:     "192.168.1.100",
-		SSHUser:     "root@pam",
-		SSHPassword: "secret",
-		Template:    "local:vztmpl/ubuntu-22.04.tar.gz",
-		RootfsSize:  "2",
+		SSHHost:      "192.168.1.100",
+		SSHUser:      "root@pam",
+		SSHPassword:  "secret",
+		Template:     "local:vztmpl/ubuntu-22.04.tar.gz",
+		RootfsSize:   "2",
 		Unprivileged: true,
 	}
 
@@ -306,12 +306,12 @@ func TestConfig_Prepare_UnprivilegedFalse(t *testing.T) {
 	// Test that Unprivileged can be set to false using raw config
 	config := &Config{}
 	raw := map[string]interface{}{
-		"ssh_host":      "192.168.1.100",
-		"ssh_user":      "root@pam",
-		"ssh_password":  "secret",
-		"template":      "local:vztmpl/ubuntu-22.04.tar.gz",
-		"rootfs_size":   "2",
-		"unprivileged":  false,
+		"ssh_host":     "192.168.1.100",
+		"ssh_user":     "root@pam",
+		"ssh_password": "secret",
+		"template":     "local:vztmpl/ubuntu-22.04.tar.gz",
+		"rootfs_size":  "2",
+		"unprivileged": false,
 	}
 
 	_, _, err := config.Prepare(raw)

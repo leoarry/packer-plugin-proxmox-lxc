@@ -4,7 +4,7 @@ package lxc
 
 import (
 	"fmt"
-	
+
 	"strconv"
 	"strings"
 	"time"
@@ -13,16 +13,17 @@ import (
 	"github.com/hashicorp/packer-plugin-sdk/template/config"
 	"github.com/hashicorp/packer-plugin-sdk/template/interpolate"
 )
+
 // sizeUnitMultiplier maps size units to their multiplier for converting to GB.
 // An empty unit means GB (no conversion needed).
 var sizeUnitMultiplier = map[string]float64{
-	"":     1,             // GB (default)
-	"G":     1,             // GB
-	"GB":    1,             // GB
-	"M":     1.0 / 1024.0, // MB to GB
-	"MB":    1.0 / 1024.0, // MB to GB
-	"T":     1024,          // TB to GB
-	"TB":    1024,          // TB to GB
+	"":   1,            // GB (default)
+	"G":  1,            // GB
+	"GB": 1,            // GB
+	"M":  1.0 / 1024.0, // MB to GB
+	"MB": 1.0 / 1024.0, // MB to GB
+	"T":  1024,         // TB to GB
+	"TB": 1024,         // TB to GB
 }
 
 // parseSizeToGB parses a size string like "2", "2GB", "2048MB" and returns
@@ -70,17 +71,16 @@ func parseSizeToGB(input string) (string, error) {
 	return result, nil
 }
 
-
 // Config defines the configuration for the Proxmox LXC builder.
 type Config struct {
 	common.PackerConfig `mapstructure:",squash"`
 
 	// SSH connection settings.
-	SSHHost       string `mapstructure:"ssh_host" required:"true"`
-	SSHPort       int    `mapstructure:"ssh_port" default:"22"`
-	SSHUser       string `mapstructure:"ssh_user" required:"true"`
-	SSHPassword   string `mapstructure:"ssh_password"`
-	SSHKeyPath    string `mapstructure:"ssh_key_path"`
+	SSHHost     string `mapstructure:"ssh_host" required:"true"`
+	SSHPort     int    `mapstructure:"ssh_port" default:"22"`
+	SSHUser     string `mapstructure:"ssh_user" required:"true"`
+	SSHPassword string `mapstructure:"ssh_password"`
+	SSHKeyPath  string `mapstructure:"ssh_key_path"`
 
 	// LXC container settings.
 	Template     string `mapstructure:"template" required:"true"`
@@ -94,10 +94,10 @@ type Config struct {
 	RootfsSize   string `mapstructure:"rootfs_size" default:"8"`
 
 	// Build settings.
-	BackupName   string `mapstructure:"backup_name"`
-	BackupDir    string `mapstructure:"backup_dir" default:"/var/lib/vz/template/cache"`
-	CTID         string `mapstructure:"ctid"`
-	LXCConfig    string `mapstructure:"lxc_config"`
+	BackupName string `mapstructure:"backup_name"`
+	BackupDir  string `mapstructure:"backup_dir" default:"/var/lib/vz/template/cache"`
+	CTID       string `mapstructure:"ctid"`
+	LXCConfig  string `mapstructure:"lxc_config"`
 
 	// SSH timeout for provisioning.
 	SSHTimeout string `mapstructure:"ssh_timeout" default:"5m"`

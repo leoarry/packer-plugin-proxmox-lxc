@@ -1,12 +1,13 @@
 package lxc
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
 
-	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
+	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 )
 
 type stepGetCTID struct{}
@@ -24,13 +25,14 @@ func (s *stepGetCTID) Run(ctx context.Context, state multistep.StateBag) multist
 	ui.Say("Getting next available CTID...")
 
 	comm := state.Get("communicator").(CommandRunner)
-	result, err := comm.RunCommand(ctx, "pvesh get /cluster/nextid")
+	var stdout bytes.Buffer
+	err := comm.RunCommand(ctx, "pvesh get /cluster/nextid", &stdout, nil)
 	if err != nil {
 		state.Put("error", fmt.Errorf("failed to get next CTID: %w", err))
 		return multistep.ActionHalt
 	}
 
-	ctid := strings.TrimSpace(result)
+	ctid := strings.TrimSpace(stdout.String())
 	if ctid == "" {
 		state.Put("error", fmt.Errorf("got empty CTID from Proxmox"))
 		return multistep.ActionHalt

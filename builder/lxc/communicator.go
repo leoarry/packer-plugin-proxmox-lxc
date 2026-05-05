@@ -1,7 +1,6 @@
 package lxc
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -16,6 +15,7 @@ import (
 // Both sshCommunicator and pctExecCommunicator implement this interface.
 type Communicator interface {
 	Start(ctx context.Context, cmd *packersdk.RemoteCmd) error
+	Wait(*packersdk.RemoteCmd) error
 	Upload(dst string, src io.Reader, fi *os.FileInfo) error
 	UploadDir(dst string, src string, exclude []string) error
 	Download(src string, dst io.Writer) error
@@ -25,54 +25,82 @@ type Communicator interface {
 // sshCommunicator executes commands on the Proxmox host via SSH.
 type sshCommunicator struct {
 	client SSHSessionProvider
+	cmdErr error
+	done   chan struct{}
 }
 
-// RunCommand executes a command on the Proxmox host and returns stdout.
+// RunCommand executes a command on the Proxmox host.
 // This method implements the CommandRunner interface.
-func (c *sshCommunicator) RunCommand(ctx context.Context, command string) (string, error) {
-	session, err := c.client.NewSession()
-	if err != nil {
-		return "", fmt.Errorf("failed to create SSH session: %w", err)
-	}
-	defer func() { _ = session.Close() }()
-
-	var stdout bytes.Buffer
-	session.SetStdout(&stdout)
-
-	err = session.Run(command)
-	if err != nil {
-		if exitErr, ok := err.(*ssh.ExitError); ok {
-			return stdout.String(), fmt.Errorf("command exited with status %d: %w", exitErr.ExitStatus(), err)
-		}
-		return stdout.String(), err
-	}
-	return stdout.String(), nil
-}
-
-func (c *sshCommunicator) Start(ctx context.Context, cmd *packersdk.RemoteCmd) error {
+func (c *sshCommunicator) RunCommand(ctx context.Context, command string, stdout, stderr io.Writer) error {
 	session, err := c.client.NewSession()
 	if err != nil {
 		return fmt.Errorf("failed to create SSH session: %w", err)
 	}
 	defer func() { _ = session.Close() }()
 
-	var stdout, stderr bytes.Buffer
-	session.SetStdout(&stdout)
-	session.SetStderr(&stderr)
-
-	command := cmd.Command
+	if stdout == nil {
+		stdout = io.Discard
+	}
+	if stderr == nil {
+		stderr = io.Discard
+	}
+	session.SetStdout(stdout)
+	session.SetStderr(stderr)
 
 	err = session.Run(command)
 	if err != nil {
 		if exitErr, ok := err.(*ssh.ExitError); ok {
-			cmd.SetExited(exitErr.ExitStatus())
-		} else {
-			cmd.SetExited(1)
+			return fmt.Errorf("command exited with status %d: %w", exitErr.ExitStatus(), err)
 		}
 		return err
 	}
-	cmd.SetExited(0)
 	return nil
+}
+
+func (c *sshCommunicator) Start(ctx context.Context, cmd *packersdk.RemoteCmd) error {
+	c.cmdErr = nil
+	c.done = make(chan struct{})
+
+	go func() {
+		defer close(c.done)
+		session, err := c.client.NewSession()
+		if err != nil {
+			c.cmdErr = fmt.Errorf("failed to create SSH session: %w", err)
+			cmd.SetExited(1)
+			return
+		}
+		defer func() { _ = session.Close() }()
+
+		if cmd.Stdout != nil {
+			session.SetStdout(cmd.Stdout)
+		} else {
+			session.SetStdout(io.Discard)
+		}
+		if cmd.Stderr != nil {
+			session.SetStderr(cmd.Stderr)
+		} else {
+			session.SetStderr(io.Discard)
+		}
+
+		err = session.Run(cmd.Command)
+		c.cmdErr = err
+		if err != nil {
+			if exitErr, ok := err.(*ssh.ExitError); ok {
+				cmd.SetExited(exitErr.ExitStatus())
+			} else {
+				cmd.SetExited(1)
+			}
+		} else {
+			cmd.SetExited(0)
+		}
+	}()
+
+	return nil
+}
+
+func (c *sshCommunicator) Wait(*packersdk.RemoteCmd) error {
+	<-c.done
+	return c.cmdErr
 }
 
 func (c *sshCommunicator) Upload(dst string, src io.Reader, fi *os.FileInfo) error {
@@ -95,24 +123,38 @@ func (c *sshCommunicator) DownloadDir(src string, dst string, exclude []string) 
 type pctExecCommunicator struct {
 	ctid   string
 	parent CommandRunner
+	cmdErr error
+	done   chan struct{}
 }
 
 func (c *pctExecCommunicator) Start(ctx context.Context, cmd *packersdk.RemoteCmd) error {
 	escaped := strings.ReplaceAll(cmd.Command, "'", "'\"'\"'")
 	pctCmd := fmt.Sprintf("pct exec %s -- bash -c '%s'", c.ctid, escaped)
 
-	output, err := c.parent.RunCommand(ctx, pctCmd)
-	_ = output // stdout captured but not used directly
-	if err != nil {
-		if exitErr, ok := err.(*ssh.ExitError); ok {
-			cmd.SetExited(exitErr.ExitStatus())
+	c.cmdErr = nil
+	c.done = make(chan struct{})
+
+	go func() {
+		defer close(c.done)
+		err := c.parent.RunCommand(ctx, pctCmd, cmd.Stdout, cmd.Stderr)
+		c.cmdErr = err
+		if err != nil {
+			if exitErr, ok := err.(*ssh.ExitError); ok {
+				cmd.SetExited(exitErr.ExitStatus())
+			} else {
+				cmd.SetExited(1)
+			}
 		} else {
-			cmd.SetExited(1)
+			cmd.SetExited(0)
 		}
-		return err
-	}
-	cmd.SetExited(0)
+	}()
+
 	return nil
+}
+
+func (c *pctExecCommunicator) Wait(*packersdk.RemoteCmd) error {
+	<-c.done
+	return c.cmdErr
 }
 
 func (c *pctExecCommunicator) Upload(dst string, src io.Reader, fi *os.FileInfo) error {
@@ -122,12 +164,12 @@ func (c *pctExecCommunicator) Upload(dst string, src io.Reader, fi *os.FileInfo)
 	}
 	tmpFile := fmt.Sprintf("/tmp/packer-upload-%s", c.ctid)
 	writeCmd := fmt.Sprintf("cat > %s << 'PACKEREOF'\n%s\nPACKEREOF", tmpFile, string(data))
-	_, err = c.parent.RunCommand(context.Background(), writeCmd)
+	err = c.parent.RunCommand(context.Background(), writeCmd, nil, nil)
 	if err != nil {
 		return fmt.Errorf("failed to write temp file: %w", err)
 	}
-	_, err = c.parent.RunCommand(context.Background(), fmt.Sprintf("pct push %s %s %s", c.ctid, tmpFile, dst))
-	_, _ = c.parent.RunCommand(context.Background(), fmt.Sprintf("rm -f %s", tmpFile))
+	err = c.parent.RunCommand(context.Background(), fmt.Sprintf("pct push %s %s %s", c.ctid, tmpFile, dst), nil, nil)
+	_ = c.parent.RunCommand(context.Background(), fmt.Sprintf("rm -f %s", tmpFile), nil, nil)
 	if err != nil {
 		return fmt.Errorf("pct push failed: %w", err)
 	}

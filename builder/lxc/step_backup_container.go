@@ -1,12 +1,13 @@
 package lxc
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
 
-	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
+	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 )
 
 type stepBackupContainer struct{}
@@ -25,32 +26,33 @@ func (s *stepBackupContainer) Run(ctx context.Context, state multistep.StateBag)
 
 	ui.Say(fmt.Sprintf("Backing up container %s...", ctid))
 
-	_, err := comm.RunCommand(ctx, fmt.Sprintf("vzdump %s --compress gzip --dumpdir /tmp", ctid))
+	err := comm.RunCommand(ctx, fmt.Sprintf("vzdump %s --compress gzip --dumpdir /tmp", ctid), nil, nil)
 	if err != nil {
 		state.Put("error", fmt.Errorf("vzdump failed: %w", err))
 		return multistep.ActionHalt
 	}
 
-	result, err := comm.RunCommand(ctx, fmt.Sprintf("ls /tmp/vzdump-lxc-%s-*.tar.gz 2>/dev/null | head -1", ctid))
+	var stdout bytes.Buffer
+	err = comm.RunCommand(ctx, fmt.Sprintf("ls /tmp/vzdump-lxc-%s-*.tar.gz 2>/dev/null | head -1", ctid), &stdout, nil)
 	if err != nil {
 		state.Put("error", fmt.Errorf("backup file not found: %w", err))
 		return multistep.ActionHalt
 	}
 
-	backupFile := strings.TrimSpace(result)
+	backupFile := strings.TrimSpace(stdout.String())
 	if backupFile == "" {
 		state.Put("error", fmt.Errorf("backup file not found in /tmp"))
 		return multistep.ActionHalt
 	}
 
-	_, err = comm.RunCommand(ctx, fmt.Sprintf("mkdir -p %s", config.BackupDir))
+	err = comm.RunCommand(ctx, fmt.Sprintf("mkdir -p %s", config.BackupDir), nil, nil)
 	if err != nil {
 		state.Put("error", fmt.Errorf("failed to create backup dir: %w", err))
 		return multistep.ActionHalt
 	}
 
 	targetPath := fmt.Sprintf("%s/%s.tar.gz", config.BackupDir, backupName)
-	_, err = comm.RunCommand(ctx, fmt.Sprintf("mv %s %s", backupFile, targetPath))
+	err = comm.RunCommand(ctx, fmt.Sprintf("mv %s %s", backupFile, targetPath), nil, nil)
 	if err != nil {
 		state.Put("error", fmt.Errorf("failed to move backup: %w", err))
 		return multistep.ActionHalt
