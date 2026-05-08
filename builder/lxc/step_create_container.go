@@ -58,4 +58,44 @@ func (s *stepCreateContainer) Run(ctx context.Context, state multistep.StateBag)
 	return multistep.ActionContinue
 }
 
-func (s *stepCreateContainer) Cleanup(state multistep.StateBag) {}
+func (s *stepCreateContainer) Cleanup(state multistep.StateBag) {
+	// If container was already destroyed by stepDestroyContainer, skip cleanup.
+	if _, ok := state.GetOk("container_destroyed"); ok {
+		return
+	}
+
+	// If container was reused (existed before our build), don't destroy it.
+	if reused, ok := state.GetOk("container_reused"); ok && reused.(bool) {
+		return
+	}
+
+	ctid, ok := state.GetOk("ctid")
+	if !ok {
+		return
+	}
+	ctidStr := ctid.(string)
+
+	// Get the command runner for the Proxmox host.
+	// After stepSetupContainerComm, the host communicator is saved as "proxmox_comm".
+	// Before that, the communicator in "communicator" is the sshCommunicator.
+	var cmdRunner CommandRunner
+	if comm, ok := state.GetOk("proxmox_comm"); ok {
+		cmdRunner = comm.(CommandRunner)
+	} else if comm, ok := state.GetOk("communicator"); ok {
+		if cr, ok := comm.(CommandRunner); ok {
+			cmdRunner = cr
+		}
+	}
+	if cmdRunner == nil {
+		return
+	}
+
+	if ui, ok := state.GetOk("ui"); ok {
+		ui.(packersdk.Ui).Say(fmt.Sprintf("Cleaning up container %s due to failure...", ctidStr))
+	}
+
+	// Best-effort cleanup: stop and destroy the container on the Proxmox host.
+	_ = cmdRunner.RunCommand(context.Background(), fmt.Sprintf("pct stop %s || true", ctidStr), nil, nil)
+	_ = cmdRunner.RunCommand(context.Background(), fmt.Sprintf("pct destroy %s --purge", ctidStr), nil, nil)
+	_ = cmdRunner.RunCommand(context.Background(), fmt.Sprintf("rm -f /tmp/vzdump-lxc-%s-*.log 2>/dev/null || true", ctidStr), nil, nil)
+}

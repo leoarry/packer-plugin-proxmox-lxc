@@ -25,6 +25,8 @@ func (s *stepDestroyContainer) Run(ctx context.Context, state multistep.StateBag
 	err = comm.RunCommand(ctx, fmt.Sprintf("pct destroy %s --purge", ctid), nil, nil)
 	if err != nil {
 		ui.Error(fmt.Sprintf("Failed to destroy container: %v", err))
+	} else {
+		state.Put("container_destroyed", true)
 	}
 
 	_ = comm.RunCommand(ctx, fmt.Sprintf("rm -f /tmp/vzdump-lxc-%s-*.log 2>/dev/null || true", ctid), nil, nil)

@@ -2,6 +2,7 @@ package lxc
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"testing"
 
@@ -468,4 +469,127 @@ type someError struct {
 
 func (e *someError) Error() string {
 	return e.msg
+}
+
+func TestStepCreateContainer_Cleanup_AlreadyDestroyed(t *testing.T) {
+	// If container was already destroyed, cleanup should skip
+	comm := &mockCommandRunner{}
+	state := new(multistep.BasicStateBag)
+	state.Put("ctid", "100")
+	state.Put("communicator", comm)
+	state.Put("container_destroyed", true)
+
+	step := &stepCreateContainer{}
+	step.Cleanup(state)
+
+	// Cleanup should not call any commands since container was already destroyed
+	if len(comm.calls) != 0 {
+		t.Errorf("Expected no commands called, got %d calls", len(comm.calls))
+	}
+}
+
+func TestStepCreateContainer_Cleanup_Reused(t *testing.T) {
+	// If container was reused, cleanup should skip
+	comm := &mockCommandRunner{}
+	state := new(multistep.BasicStateBag)
+	state.Put("ctid", "100")
+	state.Put("communicator", comm)
+	state.Put("container_reused", true)
+
+	step := &stepCreateContainer{}
+	step.Cleanup(state)
+
+	// Cleanup should not call any commands since container was reused
+	if len(comm.calls) != 0 {
+		t.Errorf("Expected no commands called, got %d calls", len(comm.calls))
+	}
+}
+
+func TestStepCreateContainer_Cleanup_NeedsCleanup(t *testing.T) {
+	// If container was created but not destroyed, cleanup should destroy it
+	comm := &mockCommandRunner{outputs: []string{"", "", ""}, errors: []error{nil, nil, nil}}
+	state := new(multistep.BasicStateBag)
+	state.Put("ctid", "100")
+	state.Put("communicator", comm)
+	state.Put("ui", &testUi{})
+	// container_reused is false (or not set) and container_destroyed is not set
+
+	step := &stepCreateContainer{}
+	step.Cleanup(state)
+
+	// Should call pct stop, pct destroy, and rm
+	if len(comm.calls) < 3 {
+		t.Errorf("Expected at least 3 commands called, got %d calls", len(comm.calls))
+	}
+}
+
+func TestStepCreateContainer_Cleanup_NoCommunicator(t *testing.T) {
+	// If communicator is not in state, cleanup should not panic
+	state := new(multistep.BasicStateBag)
+	state.Put("ctid", "100")
+	// No communicator in state
+
+	step := &stepCreateContainer{}
+	step.Cleanup(state)
+	// Should not panic
+}
+
+func TestStepCreateContainer_Cleanup_NoCtid(t *testing.T) {
+	// If ctid is not in state, cleanup should not panic
+	comm := &mockCommandRunner{}
+	state := new(multistep.BasicStateBag)
+	state.Put("communicator", comm)
+	// No ctid in state
+
+	step := &stepCreateContainer{}
+	step.Cleanup(state)
+	// Should not panic
+}
+
+func TestStepCreateContainer_Cleanup_WithProxmoxComm(t *testing.T) {
+	// If proxmox_comm is set (after stepSetupContainerComm), cleanup should use it
+	// This simulates a script failure during provisioning
+	hostComm := &mockCommandRunner{outputs: []string{"", "", ""}, errors: []error{nil, nil, nil}}
+	state := new(multistep.BasicStateBag)
+	state.Put("ctid", "100")
+	state.Put("proxmox_comm", hostComm)
+	state.Put("ui", &testUi{})
+	// container_reused is false and container_destroyed is not set
+
+	step := &stepCreateContainer{}
+	step.Cleanup(state)
+
+	// Should call pct stop, pct destroy, and rm on the host communicator
+	if len(hostComm.calls) < 3 {
+		t.Errorf("Expected at least 3 commands called, got %d calls", len(hostComm.calls))
+	}
+}
+
+func TestStepCreateContainer_Cleanup_ScriptFailure(t *testing.T) {
+	// Simulate a script failing during provisioning
+	// At this point, stepSetupContainerComm has run and set proxmox_comm
+	hostComm := &mockCommandRunner{outputs: []string{"", "", ""}, errors: []error{nil, nil, nil}}
+	state := new(multistep.BasicStateBag)
+	state.Put("ctid", "100")
+	state.Put("proxmox_comm", hostComm)
+	state.Put("ui", &testUi{})
+	// Simulate that container was not reused and not yet destroyed
+
+	step := &stepCreateContainer{}
+	step.Cleanup(state)
+
+	// Verify the correct commands were run on the host
+	expectedCommands := []string{
+		fmt.Sprintf("pct stop %s || true", "100"),
+		fmt.Sprintf("pct destroy %s --purge", "100"),
+		fmt.Sprintf("rm -f /tmp/vzdump-lxc-%s-*.log 2>/dev/null || true", "100"),
+	}
+	if len(hostComm.calls) != len(expectedCommands) {
+		t.Errorf("Expected %d commands, got %d", len(expectedCommands), len(hostComm.calls))
+	}
+	for i, expected := range expectedCommands {
+		if i < len(hostComm.calls) && hostComm.calls[i] != expected {
+			t.Errorf("Expected command %d to be %q, got %q", i, expected, hostComm.calls[i])
+		}
+	}
 }

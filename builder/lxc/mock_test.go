@@ -17,9 +17,11 @@ type mockCommandRunner struct {
 	outputs []string
 	errors  []error
 	idx     int
+	calls   []string // Records the commands that were called
 }
 
 func (m *mockCommandRunner) RunCommand(ctx context.Context, command string, stdout, stderr io.Writer) error {
+	m.calls = append(m.calls, command) // Record the command
 	if m.idx >= len(m.outputs) && m.idx >= len(m.errors) {
 		return nil
 	}
