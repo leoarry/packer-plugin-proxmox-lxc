@@ -11,7 +11,7 @@ LDFLAGS=-ldflags="-s -w -X github.com/leoarry/packer-plugin-proxmox-lxc/version.
 PACKER_PLUGIN_DIR?=$(HOME)/.config/packer/plugins
 HASHICORP_PACKER_PLUGIN_SDK_VERSION?=$(shell $(GO) list -m github.com/hashicorp/packer-plugin-sdk | cut -d ' ' -f2)
 
-.PHONY: all build clean test lint fmt check-fmt deps install install-plugin generate install-packer-sdc
+.PHONY: all build clean test test-short test-integration vet-integration lint fmt check-fmt deps install install-plugin generate install-packer-sdc
 
 all: build
 
@@ -36,6 +36,18 @@ test:
 
 test-short:
 	$(GO) test -v -short ./...
+
+# Runs the integration test suite (build tag "integration"). Tests skip
+# themselves at runtime unless PROXMOX_HOST and friends are set, so this
+# is safe to run without real Proxmox infra - it still catches compile
+# errors in integration_test.go that `make test` never builds.
+test-integration:
+	$(GO) test -tags integration -v ./... -run TestIntegration
+
+# Compile-only check for the integration-tagged test files, without
+# needing real Proxmox infra. Cheap enough to run on every CI build.
+vet-integration:
+	$(GO) vet -tags integration ./...
 
 lint:
 	$(GOLINT) run ./...

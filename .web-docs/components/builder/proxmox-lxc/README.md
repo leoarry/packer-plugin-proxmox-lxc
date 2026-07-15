@@ -6,9 +6,16 @@
 
 The `proxmox-lxc` Packer builder builds LXC container templates on a Proxmox VE host.
 It connects to the Proxmox host via SSH, creates a temporary LXC container from
-a specified template, runs provisioners inside the container, creates a
-`.tar.gz` backup using `vzdump`, and then destroys the temporary container
-leaving behind a ready-to-deploy LXC template.
+a specified template, runs provisioners inside the container, and then
+finalizes the result using one of two methods (`backup_method`):
+
+- `vzdump` (default) - creates a `.tar.gz` backup of the container via
+  `vzdump`, then stops and destroys the temporary container, leaving the
+  backup file behind as the template.
+- `template` - stops the container and converts it directly into a Proxmox
+  CT template via `pct template`. The container itself is left in place on
+  the Proxmox host (not destroyed) and becomes the artifact; it can be
+  cloned with `pct clone`.
 
 The builder communicates with Proxmox over SSH and does not require
 the Proxmox API. Any machine with SSH access to the Proxmox host can
@@ -84,11 +91,18 @@ described.
 ### Optional
 
 - `backup_dir` (string) - Directory where the backup template will be stored
-  on the Proxmox host.
+  on the Proxmox host. Only used when `backup_method` is `"vzdump"`.
   Default: `/var/lib/vz/template/cache`
 
-- `backup_name` (string) - Name for the resulting backup/template file.
-  If not set, a name is auto-generated from the CTID and timestamp.
+- `backup_method` (string) - How to finalize the built container: `"vzdump"`
+  creates a `.tar.gz` backup and destroys the container; `"template"`
+  converts the container itself into a Proxmox CT template via
+  `pct template` and leaves it in place.
+  Default: `"vzdump"`
+
+- `backup_name` (string) - Name for the resulting backup file. Only used
+  when `backup_method` is `"vzdump"`. If not set, a name is auto-generated
+  from the CTID and timestamp.
   Supports HCL2 template functions like `timestamp()` and `formatdate()` for
   dynamic naming, e.g., `"my-template_${formatdate("2006-01-02_15-04", timestamp())}_debian_12.7-1_amd64"`
 
@@ -158,8 +172,11 @@ The plugin automates the following steps on your Proxmox host:
 4. Merges custom LXC config (if provided)
 5. Starts the container
 6. Runs provisioners inside the container
-7. Creates a backup of the container via `vzdump`
-8. Stops and destroys the container (leaving the backup as a template)
+7. Finalizes the container using the configured `backup_method`:
+   - `vzdump` (default): creates a backup of the container via `vzdump`,
+     then stops and destroys the container (leaving the backup as a template)
+   - `template`: stops the container and converts it into a Proxmox CT
+     template via `pct template` (the container itself is left in place)
 
 ## Examples
 
@@ -167,3 +184,4 @@ See the `example/` directory in the repository for complete examples:
 
 - `example/basic.pkr.hcl` - Basic Ubuntu template build
 - `example/advanced.pkr.hcl` - Advanced setup with SSH key auth and k3s installation
+- `example/ct-template.pkr.hcl` - Produces a Proxmox CT template (`backup_method = "template"`) instead of a vzdump backup

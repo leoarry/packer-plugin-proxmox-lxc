@@ -69,6 +69,12 @@ func (s *stepCreateContainer) Cleanup(state multistep.StateBag) {
 		return
 	}
 
+	// If container was successfully converted to a Proxmox CT template,
+	// it *is* the artifact — don't destroy it.
+	if templated, ok := state.GetOk("container_templated"); ok && templated.(bool) {
+		return
+	}
+
 	ctid, ok := state.GetOk("ctid")
 	if !ok {
 		return

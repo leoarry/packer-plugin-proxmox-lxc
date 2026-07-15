@@ -502,10 +502,11 @@ func TestSteps_ImplementStep(t *testing.T) {
 		&stepSetupContainerComm{},
 		&stepBackupContainer{},
 		&stepDestroyContainer{},
+		&stepCreateTemplate{},
 	}
 
-	if len(steps) != 8 {
-		t.Errorf("Expected 8 steps, got %d", len(steps))
+	if len(steps) != 9 {
+		t.Errorf("Expected 9 steps, got %d", len(steps))
 	}
 }
 
@@ -547,6 +548,23 @@ func TestStepCreateContainer_Cleanup_Reused(t *testing.T) {
 	step.Cleanup(state)
 
 	// Cleanup should not call any commands since container was reused
+	if len(comm.calls) != 0 {
+		t.Errorf("Expected no commands called, got %d calls", len(comm.calls))
+	}
+}
+
+func TestStepCreateContainer_Cleanup_Templated(t *testing.T) {
+	// If container was successfully converted to a CT template, cleanup
+	// should skip destroying it — the templated container is the artifact.
+	comm := &mockCommandRunner{}
+	state := new(multistep.BasicStateBag)
+	state.Put("ctid", "100")
+	state.Put("communicator", comm)
+	state.Put("container_templated", true)
+
+	step := &stepCreateContainer{}
+	step.Cleanup(state)
+
 	if len(comm.calls) != 0 {
 		t.Errorf("Expected no commands called, got %d calls", len(comm.calls))
 	}
@@ -639,4 +657,93 @@ func TestStepCreateContainer_Cleanup_ScriptFailure(t *testing.T) {
 			t.Errorf("Expected command %d to be %q, got %q", i, expected, hostComm.calls[i])
 		}
 	}
+}
+
+func TestStepCreateTemplate_Success(t *testing.T) {
+	ui := &testUi{}
+	comm := &mockCommandRunner{outputs: []string{"", ""}, errors: []error{nil, nil}}
+
+	state := new(multistep.BasicStateBag)
+	state.Put("ui", ui)
+	state.Put("proxmox_comm", comm)
+	state.Put("ctid", "100")
+
+	step := &stepCreateTemplate{}
+	action := step.Run(context.Background(), state)
+
+	if action != multistep.ActionContinue {
+		t.Errorf("Expected ActionContinue, got %v", action)
+	}
+
+	templated, ok := state.Get("container_templated").(bool)
+	if !ok || !templated {
+		t.Errorf("Expected container_templated true")
+	}
+
+	expectedCommands := []string{"pct stop 100", "pct template 100"}
+	if len(comm.calls) != len(expectedCommands) {
+		t.Fatalf("Expected %d commands, got %d", len(expectedCommands), len(comm.calls))
+	}
+	for i, expected := range expectedCommands {
+		if comm.calls[i] != expected {
+			t.Errorf("Expected command %d to be %q, got %q", i, expected, comm.calls[i])
+		}
+	}
+}
+
+func TestStepCreateTemplate_StopError(t *testing.T) {
+	ui := &testUi{}
+	comm := &mockCommandRunner{errors: []error{&someError{msg: "pct stop failed"}}}
+
+	state := new(multistep.BasicStateBag)
+	state.Put("ui", ui)
+	state.Put("proxmox_comm", comm)
+	state.Put("ctid", "100")
+
+	step := &stepCreateTemplate{}
+	action := step.Run(context.Background(), state)
+
+	if action != multistep.ActionHalt {
+		t.Errorf("Expected ActionHalt, got %v", action)
+	}
+	if _, ok := state.GetOk("error"); !ok {
+		t.Errorf("Expected error in state")
+	}
+	if _, ok := state.GetOk("container_templated"); ok {
+		t.Errorf("Expected container_templated not set")
+	}
+}
+
+func TestStepCreateTemplate_TemplateError(t *testing.T) {
+	ui := &testUi{}
+	comm := &mockCommandRunner{
+		outputs: []string{"", ""},
+		errors:  []error{nil, &someError{msg: "pct template failed"}},
+	}
+
+	state := new(multistep.BasicStateBag)
+	state.Put("ui", ui)
+	state.Put("proxmox_comm", comm)
+	state.Put("ctid", "100")
+
+	step := &stepCreateTemplate{}
+	action := step.Run(context.Background(), state)
+
+	if action != multistep.ActionHalt {
+		t.Errorf("Expected ActionHalt, got %v", action)
+	}
+	if _, ok := state.GetOk("error"); !ok {
+		t.Errorf("Expected error in state")
+	}
+	if _, ok := state.GetOk("container_templated"); ok {
+		t.Errorf("Expected container_templated not set")
+	}
+}
+
+func TestStepCreateTemplate_Cleanup(t *testing.T) {
+	step := &stepCreateTemplate{}
+	state := new(multistep.BasicStateBag)
+
+	// Should not panic
+	step.Cleanup(state)
 }

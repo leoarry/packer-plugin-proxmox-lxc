@@ -245,3 +245,27 @@ func TestArtifact_Destroy(t *testing.T) {
 func TestArtifact_Implements(t *testing.T) {
 	var _ packersdk.Artifact = &Artifact{}
 }
+
+func TestArtifact_TemplateMethod(t *testing.T) {
+	a := &Artifact{
+		Method: "template",
+		CTID:   "100",
+		StateData: map[string]interface{}{
+			"ctid": "100",
+		},
+	}
+
+	if got := a.Id(); got != "100" {
+		t.Errorf("Id() = %q, want %q", got, "100")
+	}
+	if got := a.Files(); got != nil {
+		t.Errorf("Files() = %v, want nil", got)
+	}
+	expectedString := "LXC CT template created: CTID 100"
+	if got := a.String(); got != expectedString {
+		t.Errorf("String() = %q, want %q", got, expectedString)
+	}
+	if got := a.BuilderId(); got != "proxmox-lxc.builder" {
+		t.Errorf("BuilderId() = %q, want %q", got, "proxmox-lxc.builder")
+	}
+}

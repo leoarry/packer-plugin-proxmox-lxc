@@ -128,8 +128,9 @@ packer build template.pkr.hcl
 | `unprivileged` | bool | `true` | Create unprivileged container |
 | `features` | string | `"nesting=1"` | LXC features (e.g., `nesting=1,keyctl=1`) |
 | `rootfs_size` | string | `"8"` | Root filesystem size in GB |
-| `backup_name` | string | auto-generated | Name for the backup/template. Supports HCL2 template functions like `timestamp()` and `formatdate()` for dynamic naming, e.g., `"my-template_${formatdate("2006-01-02_15-04", timestamp())}_debian_12.7-1_amd64"` |
-| `backup_dir` | string | `"/var/lib/vz/template/cache"` | Backup destination directory |
+| `backup_method` | string | `"vzdump"` | How to finalize the build: `"vzdump"` (backup file, container destroyed) or `"template"` (converts the container itself into a Proxmox CT template via `pct template`, container kept) |
+| `backup_name` | string | auto-generated | Name for the backup file. Only used when `backup_method` is `"vzdump"`. Supports HCL2 template functions like `timestamp()` and `formatdate()` for dynamic naming, e.g., `"my-template_${formatdate("2006-01-02_15-04", timestamp())}_debian_12.7-1_amd64"` |
+| `backup_dir` | string | `"/var/lib/vz/template/cache"` | Backup destination directory. Only used when `backup_method` is `"vzdump"` |
 | `ctid` | string | auto-assigned | Specific CTID to use |
 | `lxc_config` | string | - | Additional LXC config to merge |
 | `ssh_timeout` | string | `"5m"` | SSH connection timeout |
@@ -140,6 +141,7 @@ See the `example/` directory for complete examples:
 
 - `example/basic.pkr.hcl` - Basic Ubuntu template build
 - `example/advanced.pkr.hcl` - Advanced setup with SSH key auth and k3s installation
+- `example/ct-template.pkr.hcl` - Produces a Proxmox CT template (`backup_method = "template"`) instead of a vzdump backup
 
 ## How It Works
 
@@ -151,8 +153,9 @@ The plugin automates the following steps on your Proxmox host:
 4. Merges custom LXC config (if provided)
 5. Starts the container
 6. Runs provisioners inside the container
-7. Creates a backup of the container via `vzdump`
-8. Stops and destroys the container (leaving the backup)
+7. Finalizes the container using the configured `backup_method`:
+   - `vzdump` (default): creates a backup via `vzdump`, then stops and destroys the container (leaving the backup)
+   - `template`: stops the container and converts it into a Proxmox CT template via `pct template` (the container is kept, not destroyed)
 
 ## Development
 

@@ -253,6 +253,19 @@ func (s *mockStepBackupContainer) Run(ctx context.Context, state multistep.State
 }
 func (s *mockStepBackupContainer) Cleanup(state multistep.StateBag) {}
 
+type mockStepCreateTemplate struct {
+	action    multistep.StepAction
+	templated bool
+}
+
+func (s *mockStepCreateTemplate) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
+	if s.templated {
+		state.Put("container_templated", true)
+	}
+	return s.action
+}
+func (s *mockStepCreateTemplate) Cleanup(state multistep.StateBag) {}
+
 type mockStepDestroyContainer struct {
 	action multistep.StepAction
 }
@@ -315,6 +328,83 @@ func TestBuilder_Run_Success(t *testing.T) {
 
 	if a.BackupPath != "/var/lib/vz/template/cache/lxc-template-100.tar.gz" {
 		t.Errorf("Expected backup path '/var/lib/vz/template/cache/lxc-template-100.tar.gz', got '%s'", a.BackupPath)
+	}
+}
+
+func TestBuilder_Run_TemplateMethod(t *testing.T) {
+	b := &Builder{}
+	_, _, err := b.Prepare(map[string]interface{}{
+		"ssh_host":      "192.168.1.100",
+		"ssh_user":      "root@pam",
+		"ssh_password":  "secret",
+		"template":      "local:vztmpl/ubuntu-22.04.tar.gz",
+		"rootfs_size":   "2",
+		"backup_method": "template",
+	})
+	if err != nil {
+		t.Fatalf("Prepare() failed: %v", err)
+	}
+
+	mockSteps := []multistep.Step{
+		&mockStepConnect{action: multistep.ActionContinue},
+		&mockStepGetCTID{action: multistep.ActionContinue, ctid: "100"},
+		&mockStepCreateContainer{action: multistep.ActionContinue},
+		&mockStepMergeConfig{action: multistep.ActionContinue},
+		&mockStepStartContainer{action: multistep.ActionContinue},
+		&mockStepSetupContainerComm{action: multistep.ActionContinue},
+		&mockStepProvision{action: multistep.ActionContinue},
+		&mockStepCreateTemplate{action: multistep.ActionContinue, templated: true},
+	}
+	b.setSteps(mockSteps)
+
+	ui := &testUi{}
+	artifact, err := b.Run(context.Background(), ui, nil)
+	if err != nil {
+		t.Fatalf("Run() returned error: %v", err)
+	}
+
+	a, ok := artifact.(*Artifact)
+	if !ok {
+		t.Fatalf("Expected *Artifact, got %T", artifact)
+	}
+	if a.Method != "template" {
+		t.Errorf("Expected Method 'template', got %q", a.Method)
+	}
+	if a.CTID != "100" {
+		t.Errorf("Expected CTID '100', got %q", a.CTID)
+	}
+}
+
+func TestBuilder_Run_TemplateMethod_NotTemplated(t *testing.T) {
+	b := &Builder{}
+	_, _, err := b.Prepare(map[string]interface{}{
+		"ssh_host":      "192.168.1.100",
+		"ssh_user":      "root@pam",
+		"ssh_password":  "secret",
+		"template":      "local:vztmpl/ubuntu-22.04.tar.gz",
+		"rootfs_size":   "2",
+		"backup_method": "template",
+	})
+	if err != nil {
+		t.Fatalf("Prepare() failed: %v", err)
+	}
+
+	mockSteps := []multistep.Step{
+		&mockStepConnect{action: multistep.ActionContinue},
+		&mockStepGetCTID{action: multistep.ActionContinue, ctid: "100"},
+		&mockStepCreateContainer{action: multistep.ActionContinue},
+		&mockStepMergeConfig{action: multistep.ActionContinue},
+		&mockStepStartContainer{action: multistep.ActionContinue},
+		&mockStepSetupContainerComm{action: multistep.ActionContinue},
+		&mockStepProvision{action: multistep.ActionContinue},
+		&mockStepCreateTemplate{action: multistep.ActionContinue, templated: false},
+	}
+	b.setSteps(mockSteps)
+
+	ui := &testUi{}
+	_, err = b.Run(context.Background(), ui, nil)
+	if err == nil {
+		t.Fatal("Expected error for container not templated, got nil")
 	}
 }
 

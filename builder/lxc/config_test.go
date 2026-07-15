@@ -676,6 +676,36 @@ func TestConfig_Prepare_NetworkOptions(t *testing.T) {
 	}
 }
 
+func TestConfig_Prepare_BackupMethod(t *testing.T) {
+	tests := []struct {
+		name         string
+		backupMethod string
+		wantErr      bool
+	}{
+		{name: "empty gets default vzdump", backupMethod: "", wantErr: false},
+		{name: "explicit vzdump", backupMethod: "vzdump", wantErr: false},
+		{name: "template", backupMethod: "template", wantErr: false},
+		{name: "invalid value", backupMethod: "snapshot", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{
+				SSHHost: "192.168.1.100", SSHUser: "root@pam", SSHPassword: "secret",
+				Template: "local:vztmpl/ubuntu-22.04.tar.gz", RootfsSize: "2",
+				BackupMethod: tt.backupMethod,
+			}
+			_, _, err := config.Prepare(nil)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Config.Prepare() with backupMethod %q error = %v, wantErr %v", tt.backupMethod, err, tt.wantErr)
+			}
+			if err == nil && config.BackupMethod == "" {
+				t.Errorf("Expected BackupMethod to be defaulted, got empty string")
+			}
+		})
+	}
+}
+
 func TestConfig_NetworkConfig(t *testing.T) {
 	tests := []struct {
 		name   string

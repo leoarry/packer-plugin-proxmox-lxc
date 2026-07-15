@@ -39,6 +39,7 @@ type FlatConfig struct {
 	NetworkMTU          *int              `mapstructure:"network_mtu" cty:"network_mtu" hcl:"network_mtu"`
 	BackupName          *string           `mapstructure:"backup_name" cty:"backup_name" hcl:"backup_name"`
 	BackupDir           *string           `mapstructure:"backup_dir" default:"/var/lib/vz/template/cache" cty:"backup_dir" hcl:"backup_dir"`
+	BackupMethod        *string           `mapstructure:"backup_method" default:"vzdump" cty:"backup_method" hcl:"backup_method"`
 	CTID                *string           `mapstructure:"ctid" cty:"ctid" hcl:"ctid"`
 	LXCConfig           *string           `mapstructure:"lxc_config" cty:"lxc_config" hcl:"lxc_config"`
 	SSHTimeout          *string           `mapstructure:"ssh_timeout" default:"5m" cty:"ssh_timeout" hcl:"ssh_timeout"`
@@ -85,6 +86,7 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"network_mtu":                &hcldec.AttrSpec{Name: "network_mtu", Type: cty.Number, Required: false},
 		"backup_name":                &hcldec.AttrSpec{Name: "backup_name", Type: cty.String, Required: false},
 		"backup_dir":                 &hcldec.AttrSpec{Name: "backup_dir", Type: cty.String, Required: false},
+		"backup_method":              &hcldec.AttrSpec{Name: "backup_method", Type: cty.String, Required: false},
 		"ctid":                       &hcldec.AttrSpec{Name: "ctid", Type: cty.String, Required: false},
 		"lxc_config":                 &hcldec.AttrSpec{Name: "lxc_config", Type: cty.String, Required: false},
 		"ssh_timeout":                &hcldec.AttrSpec{Name: "ssh_timeout", Type: cty.String, Required: false},

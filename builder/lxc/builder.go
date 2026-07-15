@@ -52,8 +52,11 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 			&stepStartContainer{},
 			&stepSetupContainerComm{},
 			&commonsteps.StepProvision{},
-			&stepBackupContainer{},
-			&stepDestroyContainer{},
+		}
+		if b.config.BackupMethod == "template" {
+			steps = append(steps, &stepCreateTemplate{})
+		} else {
+			steps = append(steps, &stepBackupContainer{}, &stepDestroyContainer{})
 		}
 	}
 
@@ -73,8 +76,23 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 	}
 
 	// Get artifact data from state.
-	backupPath, _ := state.Get("backup_path").(string)
 	ctid, _ := state.Get("ctid").(string)
+
+	if b.config.BackupMethod == "template" {
+		templated, _ := state.Get("container_templated").(bool)
+		if !templated {
+			return nil, fmt.Errorf("container was not converted to a CT template")
+		}
+		return &Artifact{
+			Method: "template",
+			CTID:   ctid,
+			StateData: map[string]interface{}{
+				"ctid": ctid,
+			},
+		}, nil
+	}
+
+	backupPath, _ := state.Get("backup_path").(string)
 	backupName, _ := state.Get("backup_name").(string)
 
 	if backupPath == "" {
@@ -83,6 +101,7 @@ func (b *Builder) Run(ctx context.Context, ui packersdk.Ui, hook packersdk.Hook)
 
 	// Return artifact.
 	return &Artifact{
+		Method:     "vzdump",
 		BackupPath: backupPath,
 		StateData: map[string]interface{}{
 			"backup_name": backupName,

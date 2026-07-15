@@ -102,10 +102,11 @@ type Config struct {
 	NetworkMTU int    `mapstructure:"network_mtu"`
 
 	// Build settings.
-	BackupName string `mapstructure:"backup_name"`
-	BackupDir  string `mapstructure:"backup_dir" default:"/var/lib/vz/template/cache"`
-	CTID       string `mapstructure:"ctid"`
-	LXCConfig  string `mapstructure:"lxc_config"`
+	BackupName   string `mapstructure:"backup_name"`
+	BackupDir    string `mapstructure:"backup_dir" default:"/var/lib/vz/template/cache"`
+	BackupMethod string `mapstructure:"backup_method" default:"vzdump"`
+	CTID         string `mapstructure:"ctid"`
+	LXCConfig    string `mapstructure:"lxc_config"`
 
 	// SSH timeout for provisioning.
 	SSHTimeout string `mapstructure:"ssh_timeout" default:"5m"`
@@ -142,6 +143,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.BackupDir == "" {
 		c.BackupDir = "/var/lib/vz/template/cache"
+	}
+	if c.BackupMethod == "" {
+		c.BackupMethod = "vzdump"
 	}
 	if c.SSHTimeout == "" {
 		c.SSHTimeout = "5m"
@@ -230,6 +234,11 @@ func (c *Config) Prepare(raws ...interface{}) ([]string, []string, error) {
 	// Validate network MTU, if set.
 	if c.NetworkMTU != 0 && (c.NetworkMTU < 68 || c.NetworkMTU > 65535) {
 		return nil, nil, fmt.Errorf("network_mtu must be between 68 and 65535")
+	}
+
+	// Validate backup method.
+	if c.BackupMethod != "vzdump" && c.BackupMethod != "template" {
+		return nil, nil, fmt.Errorf("backup_method must be \"vzdump\" or \"template\"")
 	}
 
 	return warnings, nil, nil
