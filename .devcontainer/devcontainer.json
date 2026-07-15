@@ -1,12 +1,16 @@
 {
   "name": "packer-plugin-dev",
   "image": "leoarry/hashicorp-plugin-devcontainer:latest",
+  "mounts": [
+    "source=${localEnv:USERPROFILE}/.claude,target=/root/.claude,type=bind"
+  ],
   "customizations": {
     "vscode": {
       "extensions": [
         "golang.go",
         "hashicorp.hcl",
-        "github.vscode-github-actions"
+        "github.vscode-github-actions",
+        "anthropic.claude-code"
       ],
       "settings": {
         "go.toolsManagement.checkForUpdates": "off",
@@ -15,7 +19,6 @@
     }
   },
   "remoteEnv": {
-    "PACKER_PLUGIN_PATH": "/root/.config/packer/plugins",
-    "ANTHROPIC_AUTH_TOKEN": "${localEnv:OPENROUTER_APIKEY}"
+    "PACKER_PLUGIN_PATH": "/root/.config/packer/plugins"
   }
 }
