@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
@@ -290,6 +291,52 @@ func TestStepCreateContainer_Create(t *testing.T) {
 	reused, ok := state.Get("container_reused").(bool)
 	if !ok || reused {
 		t.Errorf("Expected container_reused false")
+	}
+}
+
+func TestStepCreateContainer_CreateWithNetworkOptions(t *testing.T) {
+	config := &Config{
+		Unprivileged: true,
+		Storage:      "local-lvm",
+		Memory:       1024,
+		Cores:        2,
+		RootfsSize:   "2",
+		RootPassword: "test123",
+		Bridge:       "vmbr0",
+		Features:     "nesting=1",
+		Template:     "local:vztmpl/ubuntu-22.04.tar.gz",
+		Vlan:         100,
+		NetworkIP:    "192.168.1.50/24",
+		Gateway:      "192.168.1.1",
+		Firewall:     true,
+		NetworkMTU:   1500,
+	}
+	ui := &testUi{}
+	comm := &mockCommandRunner{
+		outputs: []string{"", ""},
+		errors:  []error{&someError{msg: "container not found"}, nil},
+	}
+
+	state := new(multistep.BasicStateBag)
+	state.Put("config", config)
+	state.Put("ui", ui)
+	state.Put("communicator", comm)
+	state.Put("ctid", "100")
+
+	step := &stepCreateContainer{}
+	action := step.Run(context.Background(), state)
+
+	if action != multistep.ActionContinue {
+		t.Errorf("Expected ActionContinue, got %v", action)
+	}
+
+	if len(comm.calls) < 2 {
+		t.Fatalf("Expected at least 2 commands, got %d", len(comm.calls))
+	}
+	createCmd := comm.calls[1]
+	expectedNet0 := "--net0 name=eth0,bridge=vmbr0,tag=100,ip=192.168.1.50/24,gw=192.168.1.1,firewall=1,mtu=1500"
+	if !strings.Contains(createCmd, expectedNet0) {
+		t.Errorf("Expected pct create command to contain %q, got: %s", expectedNet0, createCmd)
 	}
 }
 

@@ -32,6 +32,11 @@ type FlatConfig struct {
 	Unprivileged        *bool             `mapstructure:"unprivileged" default:"true" cty:"unprivileged" hcl:"unprivileged"`
 	Features            *string           `mapstructure:"features" default:"nesting=1" cty:"features" hcl:"features"`
 	RootfsSize          *string           `mapstructure:"rootfs_size" default:"8" cty:"rootfs_size" hcl:"rootfs_size"`
+	Vlan                *int              `mapstructure:"vlan" cty:"vlan" hcl:"vlan"`
+	NetworkIP           *string           `mapstructure:"network_ip" default:"dhcp" cty:"network_ip" hcl:"network_ip"`
+	Gateway             *string           `mapstructure:"gateway" cty:"gateway" hcl:"gateway"`
+	Firewall            *bool             `mapstructure:"firewall" cty:"firewall" hcl:"firewall"`
+	NetworkMTU          *int              `mapstructure:"network_mtu" cty:"network_mtu" hcl:"network_mtu"`
 	BackupName          *string           `mapstructure:"backup_name" cty:"backup_name" hcl:"backup_name"`
 	BackupDir           *string           `mapstructure:"backup_dir" default:"/var/lib/vz/template/cache" cty:"backup_dir" hcl:"backup_dir"`
 	CTID                *string           `mapstructure:"ctid" cty:"ctid" hcl:"ctid"`
@@ -73,6 +78,11 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"unprivileged":               &hcldec.AttrSpec{Name: "unprivileged", Type: cty.Bool, Required: false},
 		"features":                   &hcldec.AttrSpec{Name: "features", Type: cty.String, Required: false},
 		"rootfs_size":                &hcldec.AttrSpec{Name: "rootfs_size", Type: cty.String, Required: false},
+		"vlan":                       &hcldec.AttrSpec{Name: "vlan", Type: cty.Number, Required: false},
+		"network_ip":                 &hcldec.AttrSpec{Name: "network_ip", Type: cty.String, Required: false},
+		"gateway":                    &hcldec.AttrSpec{Name: "gateway", Type: cty.String, Required: false},
+		"firewall":                   &hcldec.AttrSpec{Name: "firewall", Type: cty.Bool, Required: false},
+		"network_mtu":                &hcldec.AttrSpec{Name: "network_mtu", Type: cty.Number, Required: false},
 		"backup_name":                &hcldec.AttrSpec{Name: "backup_name", Type: cty.String, Required: false},
 		"backup_dir":                 &hcldec.AttrSpec{Name: "backup_dir", Type: cty.String, Required: false},
 		"ctid":                       &hcldec.AttrSpec{Name: "ctid", Type: cty.String, Required: false},

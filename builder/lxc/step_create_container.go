@@ -32,7 +32,7 @@ func (s *stepCreateContainer) Run(ctx context.Context, state multistep.StateBag)
 
 	// Fixed: --rootfs uses config.Storage for pool and config.RootfsSize for size
 	cmd := fmt.Sprintf(
-		"pct create %s %s --unprivileged %s --features %s --hostname builder-%s --storage %s --rootfs %s:%s --memory %d --cores %d --net0 name=eth0,bridge=%s,ip=dhcp --password '%s'",
+		"pct create %s %s --unprivileged %s --features %s --hostname builder-%s --storage %s --rootfs %s:%s --memory %d --cores %d --net0 %s --password '%s'",
 		ctid,
 		config.Template,
 		unprivileged,
@@ -43,7 +43,7 @@ func (s *stepCreateContainer) Run(ctx context.Context, state multistep.StateBag)
 		config.RootfsSize,
 		config.Memory,
 		config.Cores,
-		config.Bridge,
+		config.NetworkConfig(),
 		config.RootPassword,
 	)
 

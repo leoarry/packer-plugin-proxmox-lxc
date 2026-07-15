@@ -551,6 +551,179 @@ func TestConfig_Prepare_SSHTimeoutFormats(t *testing.T) {
 	}
 }
 
+func TestConfig_Prepare_NetworkOptions(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *Config
+		wantErr bool
+	}{
+		{
+			name: "valid vlan",
+			config: &Config{
+				SSHHost: "192.168.1.100", SSHUser: "root@pam", SSHPassword: "secret",
+				Template: "local:vztmpl/ubuntu-22.04.tar.gz", RootfsSize: "2",
+				Vlan: 100,
+			},
+			wantErr: false,
+		},
+		{
+			name: "vlan too low",
+			config: &Config{
+				SSHHost: "192.168.1.100", SSHUser: "root@pam", SSHPassword: "secret",
+				Template: "local:vztmpl/ubuntu-22.04.tar.gz", RootfsSize: "2",
+				Vlan: 0,
+			},
+			wantErr: false, // 0 means "unset", not invalid
+		},
+		{
+			name: "vlan out of range - too high",
+			config: &Config{
+				SSHHost: "192.168.1.100", SSHUser: "root@pam", SSHPassword: "secret",
+				Template: "local:vztmpl/ubuntu-22.04.tar.gz", RootfsSize: "2",
+				Vlan: 4095,
+			},
+			wantErr: true,
+		},
+		{
+			name: "vlan out of range - negative",
+			config: &Config{
+				SSHHost: "192.168.1.100", SSHUser: "root@pam", SSHPassword: "secret",
+				Template: "local:vztmpl/ubuntu-22.04.tar.gz", RootfsSize: "2",
+				Vlan: -1,
+			},
+			wantErr: true,
+		},
+		{
+			name: "default network_ip is dhcp",
+			config: &Config{
+				SSHHost: "192.168.1.100", SSHUser: "root@pam", SSHPassword: "secret",
+				Template: "local:vztmpl/ubuntu-22.04.tar.gz", RootfsSize: "2",
+			},
+			wantErr: false,
+		},
+		{
+			name: "manual network_ip",
+			config: &Config{
+				SSHHost: "192.168.1.100", SSHUser: "root@pam", SSHPassword: "secret",
+				Template: "local:vztmpl/ubuntu-22.04.tar.gz", RootfsSize: "2",
+				NetworkIP: "manual",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid static network_ip with gateway",
+			config: &Config{
+				SSHHost: "192.168.1.100", SSHUser: "root@pam", SSHPassword: "secret",
+				Template: "local:vztmpl/ubuntu-22.04.tar.gz", RootfsSize: "2",
+				NetworkIP: "192.168.1.50/24", Gateway: "192.168.1.1",
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid static network_ip - missing prefix",
+			config: &Config{
+				SSHHost: "192.168.1.100", SSHUser: "root@pam", SSHPassword: "secret",
+				Template: "local:vztmpl/ubuntu-22.04.tar.gz", RootfsSize: "2",
+				NetworkIP: "192.168.1.50",
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid gateway",
+			config: &Config{
+				SSHHost: "192.168.1.100", SSHUser: "root@pam", SSHPassword: "secret",
+				Template: "local:vztmpl/ubuntu-22.04.tar.gz", RootfsSize: "2",
+				Gateway: "not-an-ip",
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid mtu",
+			config: &Config{
+				SSHHost: "192.168.1.100", SSHUser: "root@pam", SSHPassword: "secret",
+				Template: "local:vztmpl/ubuntu-22.04.tar.gz", RootfsSize: "2",
+				NetworkMTU: 1500,
+			},
+			wantErr: false,
+		},
+		{
+			name: "mtu too low",
+			config: &Config{
+				SSHHost: "192.168.1.100", SSHUser: "root@pam", SSHPassword: "secret",
+				Template: "local:vztmpl/ubuntu-22.04.tar.gz", RootfsSize: "2",
+				NetworkMTU: 10,
+			},
+			wantErr: true,
+		},
+		{
+			name: "firewall enabled",
+			config: &Config{
+				SSHHost: "192.168.1.100", SSHUser: "root@pam", SSHPassword: "secret",
+				Template: "local:vztmpl/ubuntu-22.04.tar.gz", RootfsSize: "2",
+				Firewall: true,
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, err := tt.config.Prepare(nil)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Config.Prepare() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestConfig_NetworkConfig(t *testing.T) {
+	tests := []struct {
+		name   string
+		config *Config
+		want   string
+	}{
+		{
+			name:   "defaults",
+			config: &Config{Bridge: "vmbr0", NetworkIP: "dhcp"},
+			want:   "name=eth0,bridge=vmbr0,ip=dhcp",
+		},
+		{
+			name:   "with vlan",
+			config: &Config{Bridge: "vmbr0", NetworkIP: "dhcp", Vlan: 100},
+			want:   "name=eth0,bridge=vmbr0,tag=100,ip=dhcp",
+		},
+		{
+			name:   "with static ip and gateway",
+			config: &Config{Bridge: "vmbr0", NetworkIP: "192.168.1.50/24", Gateway: "192.168.1.1"},
+			want:   "name=eth0,bridge=vmbr0,ip=192.168.1.50/24,gw=192.168.1.1",
+		},
+		{
+			name:   "with firewall enabled",
+			config: &Config{Bridge: "vmbr0", NetworkIP: "dhcp", Firewall: true},
+			want:   "name=eth0,bridge=vmbr0,ip=dhcp,firewall=1",
+		},
+		{
+			name:   "with mtu",
+			config: &Config{Bridge: "vmbr0", NetworkIP: "dhcp", NetworkMTU: 1500},
+			want:   "name=eth0,bridge=vmbr0,ip=dhcp,mtu=1500",
+		},
+		{
+			name:   "all options combined",
+			config: &Config{Bridge: "vmbr1", NetworkIP: "10.0.0.5/24", Gateway: "10.0.0.1", Vlan: 42, Firewall: true, NetworkMTU: 9000},
+			want:   "name=eth0,bridge=vmbr1,tag=42,ip=10.0.0.5/24,gw=10.0.0.1,firewall=1,mtu=9000",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.config.NetworkConfig()
+			if got != tt.want {
+				t.Errorf("Config.NetworkConfig() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestConfig_Prepare_WithRawConfig(t *testing.T) {
 	// Test that Prepare works with raw config map via decode
 	config := &Config{}

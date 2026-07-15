@@ -117,6 +117,11 @@ packer build template.pkr.hcl
 | `ssh_port` | int | `22` | SSH port |
 | `storage` | string | `"local-lvm"` | Storage for the container |
 | `bridge` | string | `"vmbr0"` | Network bridge |
+| `vlan` | int | - | VLAN tag for the bridge (1-4094). Leave unset for no VLAN tagging |
+| `network_ip` | string | `"dhcp"` | Network IP config: `"dhcp"`, `"manual"`, or a static IP in CIDR notation (e.g. `"192.168.1.50/24"`) |
+| `gateway` | string | - | Gateway IP address, used when `network_ip` is a static IP |
+| `firewall` | bool | `false` | Enable the Proxmox firewall on the container's network interface |
+| `network_mtu` | int | - | MTU for the container's network interface |
 | `memory` | int | `2048` | Memory in MB |
 | `cores` | int | `2` | Number of CPU cores |
 | `root_password` | string | `"changeme"` | Root password for the container |

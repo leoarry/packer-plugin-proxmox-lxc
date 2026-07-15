@@ -104,11 +104,26 @@ described.
 - `features` (string) - LXC features to enable (e.g., `nesting=1,keyctl=1`).
   Default: `"nesting=1"`
 
+- `firewall` (bool) - Enable the Proxmox firewall on the container's
+  network interface.
+  Default: `false`
+
+- `gateway` (string) - Gateway IP address for the container's network
+  interface. Only used when `network_ip` is set to a static IP.
+
 - `lxc_config` (string) - Additional LXC configuration to merge into the
   container configuration.
 
 - `memory` (int) - Memory in MB for the container.
   Default: `2048`
+
+- `network_ip` (string) - Network IP configuration for the container's
+  `net0` interface. One of `"dhcp"`, `"manual"`, or a static IP in CIDR
+  notation, e.g. `"192.168.1.50/24"`.
+  Default: `"dhcp"`
+
+- `network_mtu` (int) - MTU for the container's network interface.
+  If not set, the bridge/interface default is used.
 
 - `root_password` (string) - Root password for the container.
   Default: `"changeme"`
@@ -129,6 +144,9 @@ described.
 
 - `unprivileged` (bool) - Create an unprivileged container.
   Default: `true`
+
+- `vlan` (int) - VLAN tag for the container's network bridge, between `1`
+  and `4094`. If not set, the interface is not VLAN-tagged.
 
 ## How It Works
 

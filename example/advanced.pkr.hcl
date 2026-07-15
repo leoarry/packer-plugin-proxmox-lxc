@@ -18,6 +18,14 @@ source "proxmox-lxc" "debian" {
   template      = "local:vztmpl/debian-12-standard_12.0-1_amd64.tar.zst"
   storage       = "local-lvm"
   bridge        = "vmbr0"
+
+  # Network settings: tag the interface with VLAN 100 and assign a
+  # static IP instead of DHCP.
+  vlan        = 100
+  network_ip  = "192.168.100.50/24"
+  gateway     = "192.168.100.1"
+  firewall    = true
+
   memory        = 4096
   cores         = 2
   root_password = "changeme"

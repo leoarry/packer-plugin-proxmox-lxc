@@ -4,6 +4,7 @@ package lxc
 
 import (
 	"fmt"
+	"net"
 
 	"strconv"
 	"strings"
@@ -93,6 +94,13 @@ type Config struct {
 	Features     string `mapstructure:"features" default:"nesting=1"`
 	RootfsSize   string `mapstructure:"rootfs_size" default:"8"`
 
+	// Network settings for the container's net0 interface.
+	Vlan       int    `mapstructure:"vlan"`
+	NetworkIP  string `mapstructure:"network_ip" default:"dhcp"`
+	Gateway    string `mapstructure:"gateway"`
+	Firewall   bool   `mapstructure:"firewall"`
+	NetworkMTU int    `mapstructure:"network_mtu"`
+
 	// Build settings.
 	BackupName string `mapstructure:"backup_name"`
 	BackupDir  string `mapstructure:"backup_dir" default:"/var/lib/vz/template/cache"`
@@ -137,6 +145,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.SSHTimeout == "" {
 		c.SSHTimeout = "5m"
+	}
+	if c.NetworkIP == "" {
+		c.NetworkIP = "dhcp"
 	}
 }
 
@@ -199,5 +210,57 @@ func (c *Config) Prepare(raws ...interface{}) ([]string, []string, error) {
 		return nil, nil, fmt.Errorf("invalid ssh_timeout format: %w", err)
 	}
 
+	// Validate VLAN tag, if set.
+	if c.Vlan != 0 && (c.Vlan < 1 || c.Vlan > 4094) {
+		return nil, nil, fmt.Errorf("vlan must be between 1 and 4094")
+	}
+
+	// Validate network_ip: either "dhcp"/"manual" or a static IP in CIDR notation.
+	if c.NetworkIP != "dhcp" && c.NetworkIP != "manual" {
+		if _, _, err := net.ParseCIDR(c.NetworkIP); err != nil {
+			return nil, nil, fmt.Errorf("network_ip must be \"dhcp\", \"manual\", or a static IP in CIDR notation (e.g. 192.168.1.10/24): %w", err)
+		}
+	}
+
+	// Validate gateway, if set.
+	if c.Gateway != "" && net.ParseIP(c.Gateway) == nil {
+		return nil, nil, fmt.Errorf("gateway must be a valid IP address")
+	}
+
+	// Validate network MTU, if set.
+	if c.NetworkMTU != 0 && (c.NetworkMTU < 68 || c.NetworkMTU > 65535) {
+		return nil, nil, fmt.Errorf("network_mtu must be between 68 and 65535")
+	}
+
 	return warnings, nil, nil
+}
+
+// NetworkConfig builds the net0 argument value for `pct create`/`pct set`
+// from the configured network settings.
+func (c *Config) NetworkConfig() string {
+	net0 := fmt.Sprintf("name=eth0,bridge=%s", c.Bridge)
+
+	if c.Vlan != 0 {
+		net0 += fmt.Sprintf(",tag=%d", c.Vlan)
+	}
+
+	ip := c.NetworkIP
+	if ip == "" {
+		ip = "dhcp"
+	}
+	net0 += fmt.Sprintf(",ip=%s", ip)
+
+	if c.Gateway != "" {
+		net0 += fmt.Sprintf(",gw=%s", c.Gateway)
+	}
+
+	if c.Firewall {
+		net0 += ",firewall=1"
+	}
+
+	if c.NetworkMTU != 0 {
+		net0 += fmt.Sprintf(",mtu=%d", c.NetworkMTU)
+	}
+
+	return net0
 }
