@@ -393,6 +393,107 @@ func TestStepBackupContainer(t *testing.T) {
 	}
 }
 
+func TestStepBackupContainer_WithPigz(t *testing.T) {
+	config := &Config{
+		BackupDir:  "/var/lib/vz/template/cache",
+		BackupPigz: 4,
+	}
+	ui := &testUi{}
+	comm := &mockCommandRunner{
+		// Sequence: command -v pigz (found), vzdump, ls, mkdir, mv
+		outputs: []string{"", "", "/tmp/vzdump-lxc-100-2026_0503.tar.gz", "", ""},
+		errors:  []error{nil, nil, nil, nil, nil},
+	}
+
+	state := new(multistep.BasicStateBag)
+	state.Put("config", config)
+	state.Put("ui", ui)
+	state.Put("proxmox_comm", comm)
+	state.Put("ctid", "100")
+
+	step := &stepBackupContainer{}
+	action := step.Run(context.Background(), state)
+
+	if action != multistep.ActionContinue {
+		t.Errorf("Expected ActionContinue, got %v", action)
+	}
+
+	if len(comm.calls) < 2 {
+		t.Fatalf("Expected at least 2 commands, got %d", len(comm.calls))
+	}
+	if comm.calls[0] != "command -v pigz" {
+		t.Errorf("Expected first command to check for pigz, got %q", comm.calls[0])
+	}
+	expectedVzdumpCmd := "vzdump 100 --compress gzip --dumpdir /tmp --pigz 4"
+	if comm.calls[1] != expectedVzdumpCmd {
+		t.Errorf("Expected vzdump command %q, got %q", expectedVzdumpCmd, comm.calls[1])
+	}
+}
+
+func TestStepBackupContainer_PigzMissing_FallsBackToGzip(t *testing.T) {
+	config := &Config{
+		BackupDir:  "/var/lib/vz/template/cache",
+		BackupPigz: 4,
+	}
+	ui := &testUi{}
+	comm := &mockCommandRunner{
+		// Sequence: command -v pigz (NOT found), vzdump (plain gzip), ls, mkdir, mv
+		outputs: []string{"", "", "/tmp/vzdump-lxc-100-2026_0503.tar.gz", "", ""},
+		errors:  []error{&someError{msg: "pigz: not found"}, nil, nil, nil, nil},
+	}
+
+	state := new(multistep.BasicStateBag)
+	state.Put("config", config)
+	state.Put("ui", ui)
+	state.Put("proxmox_comm", comm)
+	state.Put("ctid", "100")
+
+	step := &stepBackupContainer{}
+	action := step.Run(context.Background(), state)
+
+	if action != multistep.ActionContinue {
+		t.Errorf("Expected ActionContinue, got %v", action)
+	}
+
+	if len(comm.calls) < 2 {
+		t.Fatalf("Expected at least 2 commands, got %d", len(comm.calls))
+	}
+	expectedVzdumpCmd := "vzdump 100 --compress gzip --dumpdir /tmp"
+	if comm.calls[1] != expectedVzdumpCmd {
+		t.Errorf("Expected fallback to plain gzip %q, got %q", expectedVzdumpCmd, comm.calls[1])
+	}
+}
+
+func TestStepBackupContainer_PigzDisabled(t *testing.T) {
+	config := &Config{
+		BackupDir:  "/var/lib/vz/template/cache",
+		BackupPigz: -1, // explicitly disabled (resolved value after Config.Prepare)
+	}
+	ui := &testUi{}
+	comm := &mockCommandRunner{
+		outputs: []string{"", "/tmp/vzdump-lxc-100-2026_0503.tar.gz", "", ""},
+		errors:  []error{nil, nil, nil, nil},
+	}
+
+	state := new(multistep.BasicStateBag)
+	state.Put("config", config)
+	state.Put("ui", ui)
+	state.Put("proxmox_comm", comm)
+	state.Put("ctid", "100")
+
+	step := &stepBackupContainer{}
+	action := step.Run(context.Background(), state)
+
+	if action != multistep.ActionContinue {
+		t.Errorf("Expected ActionContinue, got %v", action)
+	}
+
+	expectedVzdumpCmd := "vzdump 100 --compress gzip --dumpdir /tmp"
+	if len(comm.calls) == 0 || comm.calls[0] != expectedVzdumpCmd {
+		t.Errorf("Expected vzdump command %q, got %q", expectedVzdumpCmd, comm.calls[0])
+	}
+}
+
 func TestStepBackupContainer_Error(t *testing.T) {
 	config := &Config{}
 	ui := &testUi{}

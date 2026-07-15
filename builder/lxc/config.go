@@ -105,6 +105,7 @@ type Config struct {
 	BackupName   string `mapstructure:"backup_name"`
 	BackupDir    string `mapstructure:"backup_dir" default:"/var/lib/vz/template/cache"`
 	BackupMethod string `mapstructure:"backup_method" default:"vzdump"`
+	BackupPigz   int    `mapstructure:"backup_pigz" default:"1"`
 	CTID         string `mapstructure:"ctid"`
 	LXCConfig    string `mapstructure:"lxc_config"`
 
@@ -146,6 +147,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.BackupMethod == "" {
 		c.BackupMethod = "vzdump"
+	}
+	if c.BackupPigz == 0 {
+		c.BackupPigz = 1
 	}
 	if c.SSHTimeout == "" {
 		c.SSHTimeout = "5m"
@@ -239,6 +243,14 @@ func (c *Config) Prepare(raws ...interface{}) ([]string, []string, error) {
 	// Validate backup method.
 	if c.BackupMethod != "vzdump" && c.BackupMethod != "template" {
 		return nil, nil, fmt.Errorf("backup_method must be \"vzdump\" or \"template\"")
+	}
+
+	// Validate backup_pigz: -1 explicitly disables pigz (plain gzip); 1
+	// (the default) uses pigz with half of the host's cores; N>1 uses N
+	// as an explicit thread count. 0 is never observed here since
+	// applyDefaults already turns an unset value into 1.
+	if c.BackupPigz < -1 {
+		return nil, nil, fmt.Errorf("backup_pigz must be -1 (disable pigz) or greater")
 	}
 
 	return warnings, nil, nil

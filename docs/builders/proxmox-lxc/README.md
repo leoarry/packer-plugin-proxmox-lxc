@@ -106,14 +106,29 @@ described.
   Supports HCL2 template functions like `timestamp()` and `formatdate()` for
   dynamic naming, e.g., `"my-template_${formatdate("2006-01-02_15-04", timestamp())}_debian_12.7-1_amd64"`
 
+- `backup_pigz` (int) - Number of pigz threads to use for vzdump backup
+  compression instead of plain gzip, for faster backups on multi-core
+  hosts. `1` (default) auto-selects half of the host's cores; `>1` uses
+  that many threads; `-1` explicitly disables pigz and always uses plain
+  gzip. For any value `> 0`, the Proxmox host is checked for a `pigz`
+  binary first; if it isn't installed, the build falls back to plain
+  gzip with a warning instead of failing. Only used when `backup_method`
+  is `"vzdump"`.
+  Default: `1` (auto, half of cores)
+
 - `bridge` (string) - Network bridge for the container.
   Default: `"vmbr0"`
 
 - `cores` (int) - Number of CPU cores for the container.
   Default: `2`
 
-- `ctid` (string) - Specific CTID to use for the container.
-  If not set, the next available CTID is automatically assigned.
+- `ctid` (string) - Specific CTID to use for the container. If it already
+  exists, the build reuses it rather than creating a new one.
+  If not set, the next available CTID is automatically assigned; if that
+  CTID turns out to be claimed by a concurrent build running against the
+  same Proxmox host, a fresh CTID is fetched and retried automatically
+  (up to 5 times) rather than failing the build or reusing the other
+  build's container.
 
 - `features` (string) - LXC features to enable (e.g., `nesting=1,keyctl=1`).
   Default: `"nesting=1"`

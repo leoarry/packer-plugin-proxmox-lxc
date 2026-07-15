@@ -706,6 +706,38 @@ func TestConfig_Prepare_BackupMethod(t *testing.T) {
 	}
 }
 
+func TestConfig_Prepare_BackupPigz(t *testing.T) {
+	tests := []struct {
+		name         string
+		backupPigz   int
+		wantErr      bool
+		wantResolved int
+	}{
+		{name: "unset defaults to auto (1)", backupPigz: 0, wantErr: false, wantResolved: 1},
+		{name: "explicit half of cores", backupPigz: 1, wantErr: false, wantResolved: 1},
+		{name: "explicit thread count", backupPigz: 4, wantErr: false, wantResolved: 4},
+		{name: "explicitly disabled", backupPigz: -1, wantErr: false, wantResolved: -1},
+		{name: "invalid - less than -1", backupPigz: -2, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{
+				SSHHost: "192.168.1.100", SSHUser: "root@pam", SSHPassword: "secret",
+				Template: "local:vztmpl/ubuntu-22.04.tar.gz", RootfsSize: "2",
+				BackupPigz: tt.backupPigz,
+			}
+			_, _, err := config.Prepare(nil)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Config.Prepare() with backupPigz %d error = %v, wantErr %v", tt.backupPigz, err, tt.wantErr)
+			}
+			if err == nil && config.BackupPigz != tt.wantResolved {
+				t.Errorf("Expected resolved BackupPigz %d, got %d", tt.wantResolved, config.BackupPigz)
+			}
+		})
+	}
+}
+
 func TestConfig_NetworkConfig(t *testing.T) {
 	tests := []struct {
 		name   string

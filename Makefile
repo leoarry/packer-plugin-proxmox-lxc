@@ -11,7 +11,7 @@ LDFLAGS=-ldflags="-s -w -X github.com/leoarry/packer-plugin-proxmox-lxc/version.
 PACKER_PLUGIN_DIR?=$(HOME)/.config/packer/plugins
 HASHICORP_PACKER_PLUGIN_SDK_VERSION?=$(shell $(GO) list -m github.com/hashicorp/packer-plugin-sdk | cut -d ' ' -f2)
 
-.PHONY: all build clean test test-short test-integration vet-integration lint fmt check-fmt deps install install-plugin generate install-packer-sdc
+.PHONY: all build clean test test-short test-integration test-integration-full vet-integration lint fmt check-fmt deps install install-plugin generate install-packer-sdc
 
 all: build
 
@@ -48,6 +48,37 @@ test-integration:
 # needing real Proxmox infra. Cheap enough to run on every CI build.
 vet-integration:
 	$(GO) vet -tags integration ./...
+
+# Runs the integration suite against a REAL Proxmox host: creates,
+# provisions, and (depending on the test) backs up or templates an actual
+# container there. Pass connection details as variables on the command
+# line, e.g.:
+#
+#   make test-integration-full \
+#     PROXMOX_HOST=10.0.0.5 PROXMOX_USER=root@pam PROXMOX_PASSWORD=secret \
+#     PROXMOX_TEMPLATE=local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst
+#
+# See builder/lxc/integration_test.go for the full list of supported
+# PROXMOX_* variables (storage, ctid, vlan, network_ip, gateway, pigz...).
+# RUN narrows which integration tests run (default: all of them).
+# TIMEOUT bounds the whole run (default 30m; real builds can be slow).
+RUN?=TestIntegration
+TIMEOUT?=30m
+test-integration-full:
+	PROXMOX_HOST=$(PROXMOX_HOST) \
+	PROXMOX_PORT=$(PROXMOX_PORT) \
+	PROXMOX_USER=$(PROXMOX_USER) \
+	PROXMOX_PASSWORD=$(PROXMOX_PASSWORD) \
+	PROXMOX_KEY_PATH=$(PROXMOX_KEY_PATH) \
+	PROXMOX_TEMPLATE=$(PROXMOX_TEMPLATE) \
+	PROXMOX_STORAGE=$(PROXMOX_STORAGE) \
+	PROXMOX_CTID=$(PROXMOX_CTID) \
+	PROXMOX_BRIDGE=$(PROXMOX_BRIDGE) \
+	PROXMOX_VLAN=$(PROXMOX_VLAN) \
+	PROXMOX_NETWORK_IP=$(PROXMOX_NETWORK_IP) \
+	PROXMOX_GATEWAY=$(PROXMOX_GATEWAY) \
+	PROXMOX_BACKUP_PIGZ=$(PROXMOX_BACKUP_PIGZ) \
+	$(GO) test -tags integration -v ./... -run '$(RUN)' -timeout $(TIMEOUT)
 
 lint:
 	$(GOLINT) run ./...

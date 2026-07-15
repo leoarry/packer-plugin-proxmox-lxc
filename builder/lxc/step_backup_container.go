@@ -26,9 +26,22 @@ func (s *stepBackupContainer) Run(ctx context.Context, state multistep.StateBag)
 
 	ui.Say(fmt.Sprintf("Backing up container %s...", ctid))
 
-	err := comm.RunCommand(ctx, fmt.Sprintf("vzdump %s --compress gzip --dumpdir /tmp", ctid), nil, nil)
+	vzdumpCmd := fmt.Sprintf("vzdump %s --compress gzip --dumpdir /tmp", ctid)
+	// BackupPigz is -1 when the user explicitly disabled pigz; omitting
+	// --pigz falls back to plain gzip, same as passing --pigz 0.
+	if config.BackupPigz > 0 {
+		if pigzAvailable(ctx, comm) {
+			vzdumpCmd += fmt.Sprintf(" --pigz %d", config.BackupPigz)
+		} else {
+			ui.Say("pigz not found on Proxmox host, falling back to plain gzip for vzdump compression")
+		}
+	}
+
+	var vzdumpOut, vzdumpErr bytes.Buffer
+	err := comm.RunCommand(ctx, vzdumpCmd, &vzdumpOut, &vzdumpErr)
 	if err != nil {
-		state.Put("error", fmt.Errorf("vzdump failed: %w", err))
+		state.Put("error", fmt.Errorf("vzdump failed: %w\nstdout: %s\nstderr: %s",
+			err, strings.TrimSpace(vzdumpOut.String()), strings.TrimSpace(vzdumpErr.String())))
 		return multistep.ActionHalt
 	}
 
@@ -64,3 +77,10 @@ func (s *stepBackupContainer) Run(ctx context.Context, state multistep.StateBag)
 }
 
 func (s *stepBackupContainer) Cleanup(state multistep.StateBag) {}
+
+// pigzAvailable reports whether the pigz binary is present on the Proxmox
+// host. Checked before requesting --pigz so a host without it installed
+// falls back to plain gzip instead of failing the whole backup.
+func pigzAvailable(ctx context.Context, comm CommandRunner) bool {
+	return comm.RunCommand(ctx, "command -v pigz", nil, nil) == nil
+}

@@ -131,7 +131,8 @@ packer build template.pkr.hcl
 | `backup_method` | string | `"vzdump"` | How to finalize the build: `"vzdump"` (backup file, container destroyed) or `"template"` (converts the container itself into a Proxmox CT template via `pct template`, container kept) |
 | `backup_name` | string | auto-generated | Name for the backup file. Only used when `backup_method` is `"vzdump"`. Supports HCL2 template functions like `timestamp()` and `formatdate()` for dynamic naming, e.g., `"my-template_${formatdate("2006-01-02_15-04", timestamp())}_debian_12.7-1_amd64"` |
 | `backup_dir` | string | `"/var/lib/vz/template/cache"` | Backup destination directory. Only used when `backup_method` is `"vzdump"` |
-| `ctid` | string | auto-assigned | Specific CTID to use |
+| `backup_pigz` | int | `1` | pigz thread count for faster vzdump compression (`1` = auto, half of cores; `>1` = that many threads; `-1` = explicitly disable, plain gzip). Falls back to plain gzip with a warning if `pigz` isn't installed on the host, instead of failing. Only used when `backup_method` is `"vzdump"` |
+| `ctid` | string | auto-assigned | Specific CTID to use (reused if it already exists). If unset, an auto-assigned CTID that collides with a concurrent build on the same host is automatically retried with a fresh CTID (up to 5 times) instead of failing or reusing the other build's container |
 | `lxc_config` | string | - | Additional LXC config to merge |
 | `ssh_timeout` | string | `"5m"` | SSH connection timeout |
 
@@ -176,6 +177,50 @@ make build
 ```bash
 make test
 ```
+
+### Integration Testing
+
+The unit test suite above uses mocks and needs no real infrastructure. A
+separate integration suite (`builder/lxc/integration_test.go`, build tag
+`integration`) exercises the plugin against a **real** Proxmox host —
+connecting over SSH, creating and provisioning an actual container, and
+either backing it up (`vzdump`) or converting it into a CT template.
+
+Two safe, no-infrastructure-needed checks run as part of normal
+development (and CI):
+
+```bash
+make vet-integration    # compile-only check, catches build errors early
+make test-integration   # runs the integration tests, but they self-skip
+                         # without a real PROXMOX_HOST
+```
+
+To actually run them against your own Proxmox cluster, pass connection
+details as variables to `test-integration-full`:
+
+```bash
+make test-integration-full \
+  PROXMOX_HOST=10.0.0.5 PROXMOX_USER=root PROXMOX_PASSWORD=secret \
+  PROXMOX_TEMPLATE=local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst
+```
+
+Notes:
+
+- `ssh_user` must be a real Linux login (e.g. `root`), **not** Proxmox's
+  `user@realm` API/GUI format (`root@pam`) — this plugin connects over
+  plain SSH, not the Proxmox API.
+- Use `PROXMOX_KEY_PATH` instead of `PROXMOX_PASSWORD` for key-based auth.
+- `RUN` narrows which tests run (default: all `TestIntegration*`), e.g.
+  `RUN=TestIntegration_Connect` to just check connectivity, or
+  `RUN=TestIntegration_FullBuild_TemplateMethod` for just the CT template
+  path. `TIMEOUT` bounds the whole run (default `30m`).
+- Every optional builder setting has a matching `PROXMOX_*` variable
+  (`PROXMOX_CTID`, `PROXMOX_VLAN`, `PROXMOX_NETWORK_IP`, `PROXMOX_GATEWAY`,
+  `PROXMOX_BACKUP_PIGZ`, ...) — see the doc comments in
+  `builder/lxc/integration_test.go` for the full list.
+- Both full-build tests clean up after themselves (destroying the
+  container/template and, for the vzdump path, the backup file) once the
+  test finishes, via `t.Cleanup`.
 
 ### Linting
 

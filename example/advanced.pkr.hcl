@@ -42,6 +42,7 @@ source "proxmox-lxc" "debian" {
   # Backup settings (supports HCL2 templating for dynamic names)
   backup_name = "debian-node_${formatdate("2006-01-02_15-04", timestamp())}"
   backup_dir  = "/var/lib/vz/template/cache"
+  backup_pigz = 4 # Use pigz with 4 threads for faster compression
   ctid        = "100"  # Use specific CTID
 
   # SSH timeout for provisioning
