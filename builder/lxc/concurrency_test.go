@@ -38,7 +38,7 @@ func (h *fakeProxmoxHost) RunCommand(ctx context.Context, command string, stdout
 		}
 		h.mu.Unlock()
 		if stdout != nil {
-			fmt.Fprintf(stdout, "%d\n", id)
+			_, _ = fmt.Fprintf(stdout, "%d\n", id)
 		}
 		return nil
 
@@ -59,7 +59,7 @@ func (h *fakeProxmoxHost) RunCommand(ctx context.Context, command string, stdout
 		defer h.mu.Unlock()
 		if h.containers[id] {
 			if stderr != nil {
-				fmt.Fprintf(stderr, "unable to create CT %s - already exists\n", id)
+				_, _ = fmt.Fprintf(stderr, "unable to create CT %s - already exists\n", id)
 			}
 			return fmt.Errorf("pct create failed: CT %s already exists", id)
 		}
