@@ -15,6 +15,7 @@ import (
 // It returns a sequence of (output, error) pairs for successive commands.
 type mockCommandRunner struct {
 	outputs []string
+	stderrs []string // optional, parallel to outputs; stderr content per call
 	errors  []error
 	idx     int
 	calls   []string // Records the commands that were called
@@ -26,10 +27,13 @@ func (m *mockCommandRunner) RunCommand(ctx context.Context, command string, stdo
 		return nil
 	}
 
-	var out string
+	var out, errOut string
 	var err error
 	if m.idx < len(m.outputs) {
 		out = m.outputs[m.idx]
+	}
+	if m.idx < len(m.stderrs) {
+		errOut = m.stderrs[m.idx]
 	}
 	if m.idx < len(m.errors) {
 		err = m.errors[m.idx]
@@ -38,6 +42,9 @@ func (m *mockCommandRunner) RunCommand(ctx context.Context, command string, stdo
 
 	if stdout != nil && out != "" {
 		_, _ = stdout.Write([]byte(out))
+	}
+	if stderr != nil && errOut != "" {
+		_, _ = stderr.Write([]byte(errOut))
 	}
 	return err
 }

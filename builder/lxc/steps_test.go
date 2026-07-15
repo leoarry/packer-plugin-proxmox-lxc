@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
@@ -231,7 +232,10 @@ func TestStepStartContainer_Error(t *testing.T) {
 }
 
 func TestStepCreateContainer_Reused(t *testing.T) {
-	config := &Config{}
+	// Reuse only applies to an explicitly-configured CTID: that's the only
+	// case where "a container already exists at this ID" reflects genuine
+	// user intent rather than a race with a concurrent build.
+	config := &Config{CTID: "100"}
 	ui := &testUi{}
 	// First call: pct status returns output (no error) -> container exists
 	comm := &mockCommandRunner{outputs: []string{"container status output", ""}, errors: []error{nil, nil}}
@@ -252,6 +256,111 @@ func TestStepCreateContainer_Reused(t *testing.T) {
 	reused, ok := state.Get("container_reused").(bool)
 	if !ok || !reused {
 		t.Errorf("Expected container_reused true")
+	}
+}
+
+func TestStepCreateContainer_AutoAssignedExists_RetrySucceeds(t *testing.T) {
+	// CTID left empty: auto-assigned. If "pct status" unexpectedly
+	// succeeds for it, that's a race with a concurrent build, not a
+	// legitimate reuse case — it must retry with a fresh CTID rather than
+	// silently reusing whatever that other build just created.
+	config := &Config{Template: "local:vztmpl/ubuntu-22.04.tar.gz"}
+	ui := &testUi{}
+	// Sequence: pct status 100 (exists!), pvesh nextid (-> 101),
+	// pct status 101 (not found), pct create 101 (success).
+	comm := &mockCommandRunner{
+		outputs: []string{"exists", "101\n", "", ""},
+		errors: []error{
+			nil,
+			nil,
+			&someError{msg: "container not found"},
+			nil,
+		},
+	}
+
+	state := new(multistep.BasicStateBag)
+	state.Put("config", config)
+	state.Put("ui", ui)
+	state.Put("communicator", comm)
+	state.Put("ctid", "100")
+
+	step := &stepCreateContainer{}
+	action := step.Run(context.Background(), state)
+
+	if action != multistep.ActionContinue {
+		t.Errorf("Expected ActionContinue, got %v", action)
+	}
+	if ctid := state.Get("ctid").(string); ctid != "101" {
+		t.Errorf("Expected ctid updated to '101', got %q", ctid)
+	}
+	if reused, ok := state.Get("container_reused").(bool); !ok || reused {
+		t.Errorf("Expected container_reused false (must not reuse a raced container)")
+	}
+}
+
+func TestStepCreateContainer_AutoAssignedExists_FetchFails(t *testing.T) {
+	config := &Config{Template: "local:vztmpl/ubuntu-22.04.tar.gz"}
+	ui := &testUi{}
+	comm := &mockCommandRunner{
+		outputs: []string{"exists", ""},
+		errors:  []error{nil, &someError{msg: "pvesh failed"}},
+	}
+
+	state := new(multistep.BasicStateBag)
+	state.Put("config", config)
+	state.Put("ui", ui)
+	state.Put("communicator", comm)
+	state.Put("ctid", "100")
+
+	step := &stepCreateContainer{}
+	action := step.Run(context.Background(), state)
+
+	if action != multistep.ActionHalt {
+		t.Errorf("Expected ActionHalt, got %v", action)
+	}
+	if _, ok := state.GetOk("error"); !ok {
+		t.Errorf("Expected error in state")
+	}
+}
+
+func TestStepCreateContainer_AutoAssignedExists_RetriesExhausted(t *testing.T) {
+	config := &Config{Template: "local:vztmpl/ubuntu-22.04.tar.gz"}
+	ui := &testUi{}
+
+	// "pct status" always succeeds (exists), for maxCTIDConflictRetries+1
+	// attempts, with a successful nextid fetch after each of the first
+	// maxCTIDConflictRetries attempts.
+	var outputs []string
+	var errs []error
+	for i := 0; i <= maxCTIDConflictRetries; i++ {
+		outputs = append(outputs, "exists")
+		errs = append(errs, nil)
+		if i < maxCTIDConflictRetries {
+			outputs = append(outputs, fmt.Sprintf("%d\n", 200+i))
+			errs = append(errs, nil)
+		}
+	}
+	comm := &mockCommandRunner{outputs: outputs, errors: errs}
+
+	state := new(multistep.BasicStateBag)
+	state.Put("config", config)
+	state.Put("ui", ui)
+	state.Put("communicator", comm)
+	state.Put("ctid", "100")
+
+	step := &stepCreateContainer{}
+	action := step.Run(context.Background(), state)
+
+	if action != multistep.ActionHalt {
+		t.Errorf("Expected ActionHalt after exhausting retries, got %v", action)
+	}
+	if _, ok := state.GetOk("error"); !ok {
+		t.Errorf("Expected error in state")
+	}
+	// status * (maxCTIDConflictRetries+1 attempts) + fetch * maxCTIDConflictRetries retries
+	expectedCalls := (maxCTIDConflictRetries + 1) + maxCTIDConflictRetries
+	if len(comm.calls) != expectedCalls {
+		t.Errorf("Expected %d commands, got %d: %v", expectedCalls, len(comm.calls), comm.calls)
 	}
 }
 
@@ -362,6 +471,204 @@ func TestStepCreateContainer_CreateError(t *testing.T) {
 	// We need a more sophisticated mock that returns different values for different commands
 	// For now, just check it doesn't panic
 	_ = action
+}
+
+func TestStepCreateContainer_CTIDConflict_RetrySucceeds(t *testing.T) {
+	config := &Config{
+		Unprivileged: true,
+		Storage:      "local-lvm",
+		Memory:       1024,
+		Cores:        2,
+		RootfsSize:   "2",
+		RootPassword: "test123",
+		Bridge:       "vmbr0",
+		Features:     "nesting=1",
+		Template:     "local:vztmpl/ubuntu-22.04.tar.gz",
+		// CTID left empty: auto-assigned, so retries are allowed.
+	}
+	ui := &testUi{}
+	// Sequence: pct status 100 (not found), pct create 100 (conflict),
+	// pvesh get nextid (-> 101), pct status 101 (not found), pct create 101 (success).
+	comm := &mockCommandRunner{
+		outputs: []string{"", "", "101\n", "", ""},
+		stderrs: []string{"", "unable to create CT 100 - already exists", "", "", ""},
+		errors: []error{
+			&someError{msg: "container not found"},
+			&someError{msg: "pct create failed"},
+			nil,
+			&someError{msg: "container not found"},
+			nil,
+		},
+	}
+
+	state := new(multistep.BasicStateBag)
+	state.Put("config", config)
+	state.Put("ui", ui)
+	state.Put("communicator", comm)
+	state.Put("ctid", "100")
+
+	step := &stepCreateContainer{}
+	action := step.Run(context.Background(), state)
+
+	if action != multistep.ActionContinue {
+		t.Errorf("Expected ActionContinue, got %v", action)
+	}
+	if ctid := state.Get("ctid").(string); ctid != "101" {
+		t.Errorf("Expected ctid to be updated to '101', got %q", ctid)
+	}
+	reused, ok := state.Get("container_reused").(bool)
+	if !ok || reused {
+		t.Errorf("Expected container_reused false")
+	}
+	if len(comm.calls) != 5 {
+		t.Errorf("Expected 5 commands, got %d: %v", len(comm.calls), comm.calls)
+	}
+}
+
+func TestStepCreateContainer_NonConflictError_NoRetry(t *testing.T) {
+	config := &Config{
+		Template: "local:vztmpl/ubuntu-22.04.tar.gz",
+		// CTID left empty: auto-assigned.
+	}
+	ui := &testUi{}
+	comm := &mockCommandRunner{
+		outputs: []string{"", ""},
+		stderrs: []string{"", "disk quota exceeded"},
+		errors: []error{
+			&someError{msg: "container not found"},
+			&someError{msg: "pct create failed"},
+		},
+	}
+
+	state := new(multistep.BasicStateBag)
+	state.Put("config", config)
+	state.Put("ui", ui)
+	state.Put("communicator", comm)
+	state.Put("ctid", "100")
+
+	step := &stepCreateContainer{}
+	action := step.Run(context.Background(), state)
+
+	if action != multistep.ActionHalt {
+		t.Errorf("Expected ActionHalt, got %v", action)
+	}
+	if _, ok := state.GetOk("error"); !ok {
+		t.Errorf("Expected error in state")
+	}
+	// No retry: only the status + create calls, no CTID re-fetch.
+	if len(comm.calls) != 2 {
+		t.Errorf("Expected 2 commands (no retry), got %d: %v", len(comm.calls), comm.calls)
+	}
+}
+
+func TestStepCreateContainer_ConflictNotRetriedWithExplicitCTID(t *testing.T) {
+	config := &Config{
+		Template: "local:vztmpl/ubuntu-22.04.tar.gz",
+		CTID:     "100", // explicit: must not be re-rolled even on conflict
+	}
+	ui := &testUi{}
+	comm := &mockCommandRunner{
+		outputs: []string{"", ""},
+		stderrs: []string{"", "unable to create CT 100 - already exists"},
+		errors: []error{
+			&someError{msg: "container not found"},
+			&someError{msg: "pct create failed"},
+		},
+	}
+
+	state := new(multistep.BasicStateBag)
+	state.Put("config", config)
+	state.Put("ui", ui)
+	state.Put("communicator", comm)
+	state.Put("ctid", "100")
+
+	step := &stepCreateContainer{}
+	action := step.Run(context.Background(), state)
+
+	if action != multistep.ActionHalt {
+		t.Errorf("Expected ActionHalt, got %v", action)
+	}
+	if len(comm.calls) != 2 {
+		t.Errorf("Expected 2 commands (no retry with explicit CTID), got %d: %v", len(comm.calls), comm.calls)
+	}
+}
+
+func TestStepCreateContainer_CTIDConflict_RetriesExhausted(t *testing.T) {
+	config := &Config{
+		Template: "local:vztmpl/ubuntu-22.04.tar.gz",
+		// CTID left empty: auto-assigned.
+	}
+	ui := &testUi{}
+
+	// Build a sequence that always conflicts: (status-not-found, create-conflict)
+	// repeated maxCTIDConflictRetries+1 times, with a successful nextid fetch
+	// after each of the first maxCTIDConflictRetries conflicts.
+	var outputs, stderrs []string
+	var errs []error
+	for i := 0; i <= maxCTIDConflictRetries; i++ {
+		outputs = append(outputs, "", "")
+		stderrs = append(stderrs, "", "already exists")
+		errs = append(errs, &someError{msg: "container not found"}, &someError{msg: "pct create failed"})
+		if i < maxCTIDConflictRetries {
+			outputs = append(outputs, fmt.Sprintf("%d\n", 200+i))
+			stderrs = append(stderrs, "")
+			errs = append(errs, nil)
+		}
+	}
+	comm := &mockCommandRunner{outputs: outputs, stderrs: stderrs, errors: errs}
+
+	state := new(multistep.BasicStateBag)
+	state.Put("config", config)
+	state.Put("ui", ui)
+	state.Put("communicator", comm)
+	state.Put("ctid", "100")
+
+	step := &stepCreateContainer{}
+	action := step.Run(context.Background(), state)
+
+	if action != multistep.ActionHalt {
+		t.Errorf("Expected ActionHalt after exhausting retries, got %v", action)
+	}
+	if _, ok := state.GetOk("error"); !ok {
+		t.Errorf("Expected error in state")
+	}
+	// (status+create) * (maxCTIDConflictRetries+1 attempts) + fetch * maxCTIDConflictRetries retries
+	expectedCalls := 2*(maxCTIDConflictRetries+1) + maxCTIDConflictRetries
+	if len(comm.calls) != expectedCalls {
+		t.Errorf("Expected %d commands, got %d: %v", expectedCalls, len(comm.calls), comm.calls)
+	}
+}
+
+func TestIsCTIDConflict(t *testing.T) {
+	tests := []struct {
+		name   string
+		stderr string
+		want   bool
+	}{
+		{name: "container already exists", stderr: "CT 101 already exists on node 'pve01'", want: true},
+		{name: "config file already exists", stderr: "unable to create CT 101 - configuration file 'nodes/pve01/lxc/101.conf' already exists", want: true},
+		{name: "case insensitive", stderr: "Already Exists", want: true},
+		{name: "unrelated error", stderr: "disk quota exceeded", want: false},
+		{name: "empty", stderr: "", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isCTIDConflict(tt.stderr); got != tt.want {
+				t.Errorf("isCTIDConflict(%q) = %v, want %v", tt.stderr, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCTIDRetryBackoff(t *testing.T) {
+	for attempt := 0; attempt < 5; attempt++ {
+		d := ctidRetryBackoff(attempt)
+		minExpected := 100 * time.Millisecond * time.Duration(attempt+1)
+		maxExpected := minExpected + 200*time.Millisecond
+		if d < minExpected || d > maxExpected {
+			t.Errorf("ctidRetryBackoff(%d) = %v, want between %v and %v", attempt, d, minExpected, maxExpected)
+		}
+	}
 }
 
 func TestStepBackupContainer(t *testing.T) {
