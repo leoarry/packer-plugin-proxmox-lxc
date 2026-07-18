@@ -366,7 +366,7 @@ func TestStepCreateContainer_AutoAssignedExists_RetriesExhausted(t *testing.T) {
 
 func TestStepCreateContainer_Create(t *testing.T) {
 	config := &Config{
-		Unprivileged: true,
+		Unprivileged: boolPtr(true),
 		Storage:      "local-lvm",
 		Memory:       1024,
 		Cores:        2,
@@ -405,7 +405,7 @@ func TestStepCreateContainer_Create(t *testing.T) {
 
 func TestStepCreateContainer_CreateWithNetworkOptions(t *testing.T) {
 	config := &Config{
-		Unprivileged: true,
+		Unprivileged: boolPtr(true),
 		Storage:      "local-lvm",
 		Memory:       1024,
 		Cores:        2,
@@ -475,7 +475,7 @@ func TestStepCreateContainer_CreateError(t *testing.T) {
 
 func TestStepCreateContainer_CTIDConflict_RetrySucceeds(t *testing.T) {
 	config := &Config{
-		Unprivileged: true,
+		Unprivileged: boolPtr(true),
 		Storage:      "local-lvm",
 		Memory:       1024,
 		Cores:        2,

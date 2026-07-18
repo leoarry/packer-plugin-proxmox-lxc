@@ -90,7 +90,7 @@ type Config struct {
 	Memory       int    `mapstructure:"memory" default:"2048"`
 	Cores        int    `mapstructure:"cores" default:"2"`
 	RootPassword string `mapstructure:"root_password" default:"changeme"`
-	Unprivileged bool   `mapstructure:"unprivileged" default:"true"`
+	Unprivileged *bool  `mapstructure:"unprivileged" default:"true"`
 	Features     string `mapstructure:"features" default:"nesting=1"`
 	RootfsSize   string `mapstructure:"rootfs_size" default:"8"`
 
@@ -114,10 +114,11 @@ type Config struct {
 }
 
 // applyDefaults sets default values for Config fields.
-// Note: Unprivileged default is handled by mapstructure during Decode.
-// For Config created directly (not from raw config), Unprivileged will
-// be false (Go default) unless explicitly set.
 func (c *Config) applyDefaults() {
+	if c.Unprivileged == nil {
+		unprivileged := true
+		c.Unprivileged = &unprivileged
+	}
 	if c.SSHPort == 0 {
 		c.SSHPort = 22
 	}
@@ -254,6 +255,14 @@ func (c *Config) Prepare(raws ...interface{}) ([]string, []string, error) {
 	}
 
 	return warnings, nil, nil
+}
+
+// IsUnprivileged reports whether the container should be created as
+// unprivileged. Defaults to true (matching Proxmox's own recommended
+// default) when Unprivileged has not been explicitly set, e.g. on a Config
+// built directly in tests without going through Prepare.
+func (c *Config) IsUnprivileged() bool {
+	return c.Unprivileged == nil || *c.Unprivileged
 }
 
 // NetworkConfig builds the net0 argument value for `pct create`/`pct set`

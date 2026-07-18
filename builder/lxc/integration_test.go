@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -65,6 +66,29 @@ func runCommandsOnHost(t *testing.T, host string, port int, user, password, keyP
 		}
 		session.Close()
 	}
+}
+
+// commandOutputOnHost opens its own SSH connection to the Proxmox host and
+// runs a single command, returning its combined stdout/stderr. Unlike
+// runCommandsOnHost (which is cleanup-only and swallows errors), this is
+// used for assertions: tests need the actual output to verify real
+// container state, not just that the plugin claims to have succeeded.
+func commandOutputOnHost(t *testing.T, host string, port int, user, password, keyPath, cmd string) (string, error) {
+	t.Helper()
+	client, err := dialProxmoxSSH(host, port, user, password, keyPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to Proxmox host: %w", err)
+	}
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		return "", fmt.Errorf("failed to open session: %w", err)
+	}
+	defer session.Close()
+
+	out, err := session.CombinedOutput(cmd)
+	return string(out), err
 }
 
 // destroyContainerOnHost best-effort stops and destroys a container/CT
@@ -259,6 +283,17 @@ func TestIntegration_FullBuild(t *testing.T) {
 // t.Cleanup once the test finishes, to avoid leaving real containers
 // behind on your cluster across repeated local runs.
 //
+// The config below deliberately omits every optional field that has a
+// documented default (unprivileged, bridge, memory, cores, features, ...).
+// Because the container survives long enough to inspect, this test also
+// runs `pct config` on the real host afterwards and checks the actual
+// resulting container settings against those documented defaults. That
+// real-host check is the piece that was missing when the "unprivileged
+// defaults to true" bug shipped: earlier versions of this test built a
+// config with the same omissions and asserted the build merely succeeded,
+// never checking what the container actually came up as, so a container
+// silently created privileged looked identical to a passing test run.
+//
 // Required environment variables: See TestIntegration_FullBuild.
 func TestIntegration_FullBuild_TemplateMethod(t *testing.T) {
 	if testing.Short() {
@@ -339,5 +374,40 @@ func TestIntegration_FullBuild_TemplateMethod(t *testing.T) {
 		t.Error("Expected a non-empty CTID for the resulting CT template")
 	}
 
+	if artifact.CTID != "" {
+		out, err := commandOutputOnHost(t, host, port, user, password, keyPath,
+			fmt.Sprintf("pct config %s", artifact.CTID))
+		if err != nil {
+			t.Fatalf("pct config %s failed: %v\noutput: %s", artifact.CTID, err, out)
+		}
+
+		wantLines := map[string]string{
+			"unprivileged": "unprivileged: 1",
+			"features":     "features: nesting=1",
+			"memory":       "memory: 2048",
+			"cores":        "cores: 2",
+		}
+		for setting, wantLine := range wantLines {
+			if !containsLine(out, wantLine) {
+				t.Errorf("expected real container config to default %s (looking for line %q), got:\n%s", setting, wantLine, out)
+			}
+		}
+	}
+
 	t.Logf("Artifact: %v (CTID: %s)", artifact, artifact.CTID)
+}
+
+// containsLine reports whether haystack contains needle as one of its
+// lines, trimming surrounding whitespace. Used to check `pct config`
+// output line-by-line rather than with a raw substring match, since e.g.
+// "unprivileged: 1" must not match "unprivileged: 10" or similar false
+// positives.
+func containsLine(haystack, needle string) bool {
+	needle = strings.TrimSpace(needle)
+	for _, line := range strings.Split(haystack, "\n") {
+		if strings.TrimSpace(line) == needle {
+			return true
+		}
+	}
+	return false
 }

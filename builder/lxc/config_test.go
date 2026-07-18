@@ -1,6 +1,8 @@
 package lxc
 
 import (
+	"fmt"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -201,7 +203,7 @@ func TestConfig_Prepare(t *testing.T) {
 				Cores:        2,
 				RootfsSize:   "2",
 				SSHTimeout:   "5m",
-				Unprivileged: false,
+				Unprivileged: boolPtr(false),
 			},
 			wantErr: false,
 		},
@@ -236,11 +238,10 @@ func TestConfig_Prepare(t *testing.T) {
 
 func TestConfig_Prepare_Defaults(t *testing.T) {
 	config := &Config{
-		SSHHost:      "192.168.1.100",
-		SSHUser:      "root@pam",
-		SSHPassword:  "secret",
-		Template:     "local:vztmpl/ubuntu-22.04.tar.gz",
-		Unprivileged: true, // Set explicitly since mapstructure default not applied when creating directly
+		SSHHost:     "192.168.1.100",
+		SSHUser:     "root@pam",
+		SSHPassword: "secret",
+		Template:    "local:vztmpl/ubuntu-22.04.tar.gz",
 	}
 
 	_, _, err := config.Prepare(nil)
@@ -279,17 +280,76 @@ func TestConfig_Prepare_Defaults(t *testing.T) {
 	if config.SSHTimeout != "5m" {
 		t.Errorf("Expected default SSHTimeout '5m', got %s", config.SSHTimeout)
 	}
+	if !config.IsUnprivileged() {
+		t.Errorf("Expected default Unprivileged true, got %v", config.Unprivileged)
+	}
+}
+
+// TestConfig_Prepare_DefaultTagsMatchAppliedDefaults is a general regression
+// guard for the whole class of bug behind the "unprivileged always defaults
+// to false" issue: a `default:"..."` struct tag on Config that Prepare()
+// doesn't actually honor. Rather than hand-listing expected values (which
+// silently goes stale the moment someone adds a field and forgets to wire
+// it into applyDefaults), it reads every `default` tag on Config via
+// reflection and checks that Prepare(), run against a raw config map with
+// every optional field omitted, actually produced that value. This is what
+// would have caught the Unprivileged bug automatically: the tag promised
+// "true", decode silently left the zero value "false", and no other test
+// compared the two.
+//
+// Crucially the input is a raw map decoded through Prepare() -- not a
+// Config struct built directly -- because building the struct directly
+// bypasses the mapstructure decode path entirely and was exactly how the
+// original bug went unnoticed by the tests that existed before this fix.
+func TestConfig_Prepare_DefaultTagsMatchAppliedDefaults(t *testing.T) {
+	config := &Config{}
+	raw := map[string]interface{}{
+		"ssh_host":     "192.168.1.100",
+		"ssh_user":     "root@pam",
+		"ssh_password": "secret",
+		"template":     "local:vztmpl/ubuntu-22.04.tar.gz",
+	}
+
+	_, _, err := config.Prepare(raw)
+	if err != nil {
+		t.Fatalf("Config.Prepare() unexpected error = %v", err)
+	}
+
+	rt := reflect.TypeOf(*config)
+	rv := reflect.ValueOf(*config)
+	for i := 0; i < rt.NumField(); i++ {
+		field := rt.Field(i)
+		wantStr, ok := field.Tag.Lookup("default")
+		if !ok {
+			continue
+		}
+
+		fv := rv.Field(i)
+		if fv.Kind() == reflect.Ptr {
+			if fv.IsNil() {
+				t.Errorf("field %s: has default tag %q but is nil after Prepare()", field.Name, wantStr)
+				continue
+			}
+			fv = fv.Elem()
+		}
+
+		gotStr := fmt.Sprintf("%v", fv.Interface())
+		if gotStr != wantStr {
+			t.Errorf("field %s: default tag says %q but Prepare() produced %q -- update applyDefaults() (or the tag, if it's now stale)", field.Name, wantStr, gotStr)
+		}
+	}
 }
 
 func TestConfig_Prepare_UnprivilegedDefault(t *testing.T) {
-	// Test that Unprivileged can be set to true when creating Config directly
+	// Test that omitting unprivileged entirely defaults to true, both when
+	// building a Config directly and when decoding from a raw config map
+	// that never mentions the key (the actual JSON/HCL user scenario).
 	config := &Config{
-		SSHHost:      "192.168.1.100",
-		SSHUser:      "root@pam",
-		SSHPassword:  "secret",
-		Template:     "local:vztmpl/ubuntu-22.04.tar.gz",
-		RootfsSize:   "2",
-		Unprivileged: true,
+		SSHHost:     "192.168.1.100",
+		SSHUser:     "root@pam",
+		SSHPassword: "secret",
+		Template:    "local:vztmpl/ubuntu-22.04.tar.gz",
+		RootfsSize:  "2",
 	}
 
 	_, _, err := config.Prepare(nil)
@@ -297,8 +357,26 @@ func TestConfig_Prepare_UnprivilegedDefault(t *testing.T) {
 		t.Fatalf("Config.Prepare() unexpected error = %v", err)
 	}
 
-	if config.Unprivileged != true {
-		t.Errorf("Expected Unprivileged true, got %v", config.Unprivileged)
+	if !config.IsUnprivileged() {
+		t.Errorf("Expected Unprivileged to default to true, got %v", config.Unprivileged)
+	}
+
+	rawConfig := &Config{}
+	raw := map[string]interface{}{
+		"ssh_host":     "192.168.1.100",
+		"ssh_user":     "root@pam",
+		"ssh_password": "secret",
+		"template":     "local:vztmpl/ubuntu-22.04.tar.gz",
+		"rootfs_size":  "2",
+	}
+
+	_, _, err = rawConfig.Prepare(raw)
+	if err != nil {
+		t.Fatalf("Config.Prepare() unexpected error = %v", err)
+	}
+
+	if !rawConfig.IsUnprivileged() {
+		t.Errorf("Expected Unprivileged to default to true when omitted from raw config, got %v", rawConfig.Unprivileged)
 	}
 }
 
@@ -319,7 +397,7 @@ func TestConfig_Prepare_UnprivilegedFalse(t *testing.T) {
 		t.Fatalf("Config.Prepare() unexpected error = %v", err)
 	}
 
-	if config.Unprivileged != false {
+	if config.IsUnprivileged() {
 		t.Errorf("Expected Unprivileged false, got %v", config.Unprivileged)
 	}
 }
@@ -828,7 +906,7 @@ func TestConfig_Prepare_WithRawConfig(t *testing.T) {
 	if config.Cores != 4 {
 		t.Errorf("Expected Cores 4, got %d", config.Cores)
 	}
-	if config.Unprivileged != false {
+	if config.IsUnprivileged() {
 		t.Errorf("Expected Unprivileged false, got %v", config.Unprivileged)
 	}
 	if config.CTID != "200" {

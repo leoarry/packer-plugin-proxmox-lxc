@@ -63,7 +63,7 @@ func (s *stepCreateContainer) Run(ctx context.Context, state multistep.StateBag)
 		ui.Say(fmt.Sprintf("Creating container %s...", ctid))
 
 		unprivileged := "1"
-		if !config.Unprivileged {
+		if !config.IsUnprivileged() {
 			unprivileged = "0"
 		}
 

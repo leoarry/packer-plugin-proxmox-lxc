@@ -11,6 +11,11 @@ import (
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 )
 
+// boolPtr returns a pointer to b, for populating *bool config fields in tests.
+func boolPtr(b bool) *bool {
+	return &b
+}
+
 // mockCommandRunner implements CommandRunner for testing.
 // It returns a sequence of (output, error) pairs for successive commands.
 type mockCommandRunner struct {

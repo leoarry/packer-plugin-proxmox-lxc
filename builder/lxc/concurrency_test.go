@@ -96,7 +96,7 @@ func TestConcurrentBuilds_CTIDConflict_ResolvedByRetry(t *testing.T) {
 
 			config := &Config{
 				Template:     "local:vztmpl/ubuntu-22.04.tar.gz",
-				Unprivileged: true,
+				Unprivileged: boolPtr(true),
 				Storage:      "local-lvm",
 				Memory:       512,
 				Cores:        1,
