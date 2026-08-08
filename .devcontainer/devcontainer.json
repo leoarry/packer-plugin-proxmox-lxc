@@ -1,6 +1,6 @@
 {
   "name": "packer-plugin-dev",
-  "image": "leoarry/hashicorp-plugin-devcontainer:latest",
+  "image": "leoarry/devcontainer-hashicorp-plugin:latest",
   "mounts": [
     "source=${localEnv:USERPROFILE}/.claude,target=/root/.claude,type=bind"
   ],
