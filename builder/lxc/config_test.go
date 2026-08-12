@@ -851,26 +851,20 @@ func TestConfig_Prepare_BackupCompression(t *testing.T) {
 
 // Every accepted algorithm must map to an extension, or the backup step would
 // look for a file with an empty suffix and report "backup file not found".
-func TestBackupCompressionExtensions(t *testing.T) {
-	tests := []struct {
-		compression string
-		wantAlgo    string
-		wantExt     string
-	}{
-		{compression: "", wantAlgo: "gzip", wantExt: "tar.gz"},
-		{compression: "gzip", wantAlgo: "gzip", wantExt: "tar.gz"},
-		{compression: "zstd", wantAlgo: "zstd", wantExt: "tar.zst"},
-		{compression: "lzo", wantAlgo: "lzo", wantExt: "tar.lzo"},
+func TestBackupCompressionExt(t *testing.T) {
+	want := map[string]string{
+		"gzip": "tar.gz",
+		"lzo":  "tar.lzo",
+		"zstd": "tar.zst",
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.compression, func(t *testing.T) {
-			algo, ext := resolveBackupCompression(tt.compression)
-			if algo != tt.wantAlgo || ext != tt.wantExt {
-				t.Errorf("resolveBackupCompression(%q) = (%q, %q), want (%q, %q)",
-					tt.compression, algo, ext, tt.wantAlgo, tt.wantExt)
-			}
-		})
+	if len(backupCompressionExt) != len(want) {
+		t.Fatalf("backupCompressionExt has %d entries, want %d", len(backupCompressionExt), len(want))
+	}
+	for algo, wantExt := range want {
+		if ext := backupCompressionExt[algo]; ext != wantExt {
+			t.Errorf("backupCompressionExt[%q] = %q, want %q", algo, ext, wantExt)
+		}
 	}
 }
 

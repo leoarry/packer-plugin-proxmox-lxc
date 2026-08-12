@@ -712,8 +712,8 @@ func TestStepBackupContainer_Compression(t *testing.T) {
 		wantPath    string
 	}{
 		{
-			name:        "default is gzip",
-			compression: "",
+			name:        "gzip",
+			compression: "gzip",
 			wantVzdump:  "vzdump 100 --compress gzip --dumpdir /tmp",
 			wantLs:      "ls /tmp/vzdump-lxc-100-*.tar.gz 2>/dev/null | head -1",
 			wantPath:    "/var/lib/vz/template/cache/lxc-template-100.tar.gz",
@@ -811,8 +811,9 @@ func TestStepBackupContainer_NonGzipIgnoresPigz(t *testing.T) {
 
 func TestStepBackupContainer_WithPigz(t *testing.T) {
 	config := &Config{
-		BackupDir:  "/var/lib/vz/template/cache",
-		BackupPigz: 4,
+		BackupDir:         "/var/lib/vz/template/cache",
+		BackupCompression: "gzip",
+		BackupPigz:        4,
 	}
 	ui := &testUi{}
 	comm := &mockCommandRunner{
@@ -848,8 +849,9 @@ func TestStepBackupContainer_WithPigz(t *testing.T) {
 
 func TestStepBackupContainer_PigzMissing_FallsBackToGzip(t *testing.T) {
 	config := &Config{
-		BackupDir:  "/var/lib/vz/template/cache",
-		BackupPigz: 4,
+		BackupDir:         "/var/lib/vz/template/cache",
+		BackupCompression: "gzip",
+		BackupPigz:        4,
 	}
 	ui := &testUi{}
 	comm := &mockCommandRunner{
@@ -882,8 +884,9 @@ func TestStepBackupContainer_PigzMissing_FallsBackToGzip(t *testing.T) {
 
 func TestStepBackupContainer_PigzDisabled(t *testing.T) {
 	config := &Config{
-		BackupDir:  "/var/lib/vz/template/cache",
-		BackupPigz: -1, // explicitly disabled (resolved value after Config.Prepare)
+		BackupDir:         "/var/lib/vz/template/cache",
+		BackupCompression: "gzip",
+		BackupPigz:        -1, // explicitly disabled (resolved value after Config.Prepare)
 	}
 	ui := &testUi{}
 	comm := &mockCommandRunner{

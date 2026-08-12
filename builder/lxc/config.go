@@ -17,10 +17,6 @@ import (
 	"github.com/hashicorp/packer-plugin-sdk/template/interpolate"
 )
 
-// defaultBackupCompression is vzdump's algorithm when backup_compression is
-// unset, kept at gzip so existing builds produce the same artifact as before.
-const defaultBackupCompression = "gzip"
-
 // backupCompressionExt maps each supported vzdump --compress value to the
 // extension vzdump appends to the dump file. It is the single source for both
 // config validation and the backup step's file discovery, so the accepted set
@@ -29,16 +25,6 @@ var backupCompressionExt = map[string]string{
 	"gzip": "tar.gz",
 	"lzo":  "tar.lzo",
 	"zstd": "tar.zst",
-}
-
-// resolveBackupCompression returns the algorithm to pass to vzdump and the
-// extension it will write. An empty algorithm resolves to the default rather
-// than an unknown extension, so a Config built without Prepare still works.
-func resolveBackupCompression(algo string) (string, string) {
-	if algo == "" {
-		algo = defaultBackupCompression
-	}
-	return algo, backupCompressionExt[algo]
 }
 
 // sizeUnitMultiplier maps size units to their multiplier for converting to GB.
@@ -179,7 +165,7 @@ func (c *Config) applyDefaults() {
 		c.BackupMethod = "vzdump"
 	}
 	if c.BackupCompression == "" {
-		c.BackupCompression = defaultBackupCompression
+		c.BackupCompression = "gzip"
 	}
 	if c.BackupPigz == 0 {
 		c.BackupPigz = 1
