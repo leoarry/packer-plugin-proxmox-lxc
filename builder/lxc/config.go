@@ -4,7 +4,9 @@ package lxc
 
 import (
 	"fmt"
+	"maps"
 	"net"
+	"slices"
 
 	"strconv"
 	"strings"
@@ -14,6 +16,16 @@ import (
 	"github.com/hashicorp/packer-plugin-sdk/template/config"
 	"github.com/hashicorp/packer-plugin-sdk/template/interpolate"
 )
+
+// backupCompressionExt maps each supported vzdump --compress value to the
+// extension vzdump appends to the dump file. It is the single source for both
+// config validation and the backup step's file discovery, so the accepted set
+// and the expected filenames cannot drift apart.
+var backupCompressionExt = map[string]string{
+	"gzip": "tar.gz",
+	"lzo":  "tar.lzo",
+	"zstd": "tar.zst",
+}
 
 // sizeUnitMultiplier maps size units to their multiplier for converting to GB.
 // An empty unit means GB (no conversion needed).
@@ -102,12 +114,15 @@ type Config struct {
 	NetworkMTU int    `mapstructure:"network_mtu"`
 
 	// Build settings.
-	BackupName   string `mapstructure:"backup_name"`
-	BackupDir    string `mapstructure:"backup_dir" default:"/var/lib/vz/template/cache"`
-	BackupMethod string `mapstructure:"backup_method" default:"vzdump"`
-	BackupPigz   int    `mapstructure:"backup_pigz" default:"1"`
-	CTID         string `mapstructure:"ctid"`
-	LXCConfig    string `mapstructure:"lxc_config"`
+	BackupName string `mapstructure:"backup_name"`
+	BackupDir  string `mapstructure:"backup_dir" default:"/var/lib/vz/template/cache"`
+	// BackupCompression is vzdump's --compress algorithm. backup_pigz applies
+	// to gzip only; zstd and lzo ignore it.
+	BackupCompression string `mapstructure:"backup_compression" default:"gzip"`
+	BackupMethod      string `mapstructure:"backup_method" default:"vzdump"`
+	BackupPigz        int    `mapstructure:"backup_pigz" default:"1"`
+	CTID              string `mapstructure:"ctid"`
+	LXCConfig         string `mapstructure:"lxc_config"`
 
 	// SSH timeout for provisioning.
 	SSHTimeout string `mapstructure:"ssh_timeout" default:"5m"`
@@ -148,6 +163,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.BackupMethod == "" {
 		c.BackupMethod = "vzdump"
+	}
+	if c.BackupCompression == "" {
+		c.BackupCompression = "gzip"
 	}
 	if c.BackupPigz == 0 {
 		c.BackupPigz = 1
@@ -252,6 +270,11 @@ func (c *Config) Prepare(raws ...interface{}) ([]string, []string, error) {
 	// applyDefaults already turns an unset value into 1.
 	if c.BackupPigz < -1 {
 		return nil, nil, fmt.Errorf("backup_pigz must be -1 (disable pigz) or greater")
+	}
+
+	if _, ok := backupCompressionExt[c.BackupCompression]; !ok {
+		return nil, nil, fmt.Errorf("backup_compression must be one of %s",
+			strings.Join(slices.Sorted(maps.Keys(backupCompressionExt)), ", "))
 	}
 
 	return warnings, nil, nil

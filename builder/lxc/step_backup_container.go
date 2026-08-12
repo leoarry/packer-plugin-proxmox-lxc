@@ -26,10 +26,13 @@ func (s *stepBackupContainer) Run(ctx context.Context, state multistep.StateBag)
 
 	ui.Say(fmt.Sprintf("Backing up container %s...", ctid))
 
-	vzdumpCmd := fmt.Sprintf("vzdump %s --compress gzip --dumpdir /tmp", ctid)
+	backupExt := backupCompressionExt[config.BackupCompression]
+
+	vzdumpCmd := fmt.Sprintf("vzdump %s --compress %s --dumpdir /tmp", ctid, config.BackupCompression)
 	// BackupPigz is -1 when the user explicitly disabled pigz; omitting
-	// --pigz falls back to plain gzip, same as passing --pigz 0.
-	if config.BackupPigz > 0 {
+	// --pigz falls back to plain gzip, same as passing --pigz 0. pigz is a
+	// parallel gzip, so vzdump ignores it for every other algorithm.
+	if config.BackupCompression == "gzip" && config.BackupPigz > 0 {
 		if pigzAvailable(ctx, comm) {
 			vzdumpCmd += fmt.Sprintf(" --pigz %d", config.BackupPigz)
 		} else {
@@ -46,7 +49,7 @@ func (s *stepBackupContainer) Run(ctx context.Context, state multistep.StateBag)
 	}
 
 	var stdout bytes.Buffer
-	err = comm.RunCommand(ctx, fmt.Sprintf("ls /tmp/vzdump-lxc-%s-*.tar.gz 2>/dev/null | head -1", ctid), &stdout, nil)
+	err = comm.RunCommand(ctx, fmt.Sprintf("ls /tmp/vzdump-lxc-%s-*.%s 2>/dev/null | head -1", ctid, backupExt), &stdout, nil)
 	if err != nil {
 		state.Put("error", fmt.Errorf("backup file not found: %w", err))
 		return multistep.ActionHalt
@@ -64,7 +67,7 @@ func (s *stepBackupContainer) Run(ctx context.Context, state multistep.StateBag)
 		return multistep.ActionHalt
 	}
 
-	targetPath := fmt.Sprintf("%s/%s.tar.gz", config.BackupDir, backupName)
+	targetPath := fmt.Sprintf("%s/%s.%s", config.BackupDir, backupName, backupExt)
 	err = comm.RunCommand(ctx, fmt.Sprintf("mv %s %s", backupFile, targetPath), nil, nil)
 	if err != nil {
 		state.Put("error", fmt.Errorf("failed to move backup: %w", err))

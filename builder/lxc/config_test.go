@@ -816,6 +816,58 @@ func TestConfig_Prepare_BackupPigz(t *testing.T) {
 	}
 }
 
+func TestConfig_Prepare_BackupCompression(t *testing.T) {
+	tests := []struct {
+		name         string
+		compression  string
+		wantErr      bool
+		wantResolved string
+	}{
+		{name: "unset defaults to gzip", compression: "", wantResolved: "gzip"},
+		{name: "explicit gzip", compression: "gzip", wantResolved: "gzip"},
+		{name: "zstd", compression: "zstd", wantResolved: "zstd"},
+		{name: "lzo", compression: "lzo", wantResolved: "lzo"},
+		{name: "invalid - unsupported algorithm", compression: "bzip2", wantErr: true},
+		{name: "invalid - vzdump numeric form is not accepted", compression: "0", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{
+				SSHHost: "192.168.1.100", SSHUser: "root@pam", SSHPassword: "secret",
+				Template: "local:vztmpl/ubuntu-22.04.tar.gz", RootfsSize: "2",
+				BackupCompression: tt.compression,
+			}
+			_, _, err := config.Prepare(nil)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Config.Prepare() with backupCompression %q error = %v, wantErr %v", tt.compression, err, tt.wantErr)
+			}
+			if err == nil && config.BackupCompression != tt.wantResolved {
+				t.Errorf("Expected resolved BackupCompression %q, got %q", tt.wantResolved, config.BackupCompression)
+			}
+		})
+	}
+}
+
+// Every accepted algorithm must map to an extension, or the backup step would
+// look for a file with an empty suffix and report "backup file not found".
+func TestBackupCompressionExt(t *testing.T) {
+	want := map[string]string{
+		"gzip": "tar.gz",
+		"lzo":  "tar.lzo",
+		"zstd": "tar.zst",
+	}
+
+	if len(backupCompressionExt) != len(want) {
+		t.Fatalf("backupCompressionExt has %d entries, want %d", len(backupCompressionExt), len(want))
+	}
+	for algo, wantExt := range want {
+		if ext := backupCompressionExt[algo]; ext != wantExt {
+			t.Errorf("backupCompressionExt[%q] = %q, want %q", algo, ext, wantExt)
+		}
+	}
+}
+
 func TestConfig_NetworkConfig(t *testing.T) {
 	tests := []struct {
 		name   string

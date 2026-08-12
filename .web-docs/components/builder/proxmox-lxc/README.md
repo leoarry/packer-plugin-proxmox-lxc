@@ -106,6 +106,15 @@ described.
   Supports HCL2 template functions like `timestamp()` and `formatdate()` for
   dynamic naming, e.g., `"my-template_${formatdate("2006-01-02_15-04", timestamp())}_debian_12.7-1_amd64"`
 
+- `backup_compression` (string) - Compression algorithm passed to `vzdump`,
+  one of `"gzip"`, `"lzo"` or `"zstd"`. `zstd` decompresses faster and
+  produces a smaller artifact, and is Proxmox VE's own `vzdump` default
+  since 6.2. The choice determines the artifact's extension
+  (`.tar.gz`, `.tar.lzo`, `.tar.zst`). `backup_pigz` applies to `gzip`
+  only and is ignored for the others. Only used when `backup_method`
+  is `"vzdump"`.
+  Default: `"gzip"`
+
 - `backup_pigz` (int) - Number of pigz threads to use for vzdump backup
   compression instead of plain gzip, for faster backups on multi-core
   hosts. `1` (default) auto-selects half of the host's cores; `>1` uses

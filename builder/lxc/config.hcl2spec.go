@@ -39,6 +39,7 @@ type FlatConfig struct {
 	NetworkMTU          *int              `mapstructure:"network_mtu" cty:"network_mtu" hcl:"network_mtu"`
 	BackupName          *string           `mapstructure:"backup_name" cty:"backup_name" hcl:"backup_name"`
 	BackupDir           *string           `mapstructure:"backup_dir" default:"/var/lib/vz/template/cache" cty:"backup_dir" hcl:"backup_dir"`
+	BackupCompression   *string           `mapstructure:"backup_compression" default:"gzip" cty:"backup_compression" hcl:"backup_compression"`
 	BackupMethod        *string           `mapstructure:"backup_method" default:"vzdump" cty:"backup_method" hcl:"backup_method"`
 	BackupPigz          *int              `mapstructure:"backup_pigz" default:"1" cty:"backup_pigz" hcl:"backup_pigz"`
 	CTID                *string           `mapstructure:"ctid" cty:"ctid" hcl:"ctid"`
@@ -87,6 +88,7 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"network_mtu":                &hcldec.AttrSpec{Name: "network_mtu", Type: cty.Number, Required: false},
 		"backup_name":                &hcldec.AttrSpec{Name: "backup_name", Type: cty.String, Required: false},
 		"backup_dir":                 &hcldec.AttrSpec{Name: "backup_dir", Type: cty.String, Required: false},
+		"backup_compression":         &hcldec.AttrSpec{Name: "backup_compression", Type: cty.String, Required: false},
 		"backup_method":              &hcldec.AttrSpec{Name: "backup_method", Type: cty.String, Required: false},
 		"backup_pigz":                &hcldec.AttrSpec{Name: "backup_pigz", Type: cty.Number, Required: false},
 		"ctid":                       &hcldec.AttrSpec{Name: "ctid", Type: cty.String, Required: false},

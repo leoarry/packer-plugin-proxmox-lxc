@@ -700,10 +700,120 @@ func TestStepBackupContainer(t *testing.T) {
 	}
 }
 
+// Each algorithm must reach vzdump AND drive the dump-file lookup and the
+// artifact path, or the backup would succeed on the host and then be reported
+// as missing because the step globbed for the wrong extension.
+func TestStepBackupContainer_Compression(t *testing.T) {
+	tests := []struct {
+		name        string
+		compression string
+		wantVzdump  string
+		wantLs      string
+		wantPath    string
+	}{
+		{
+			name:        "gzip",
+			compression: "gzip",
+			wantVzdump:  "vzdump 100 --compress gzip --dumpdir /tmp",
+			wantLs:      "ls /tmp/vzdump-lxc-100-*.tar.gz 2>/dev/null | head -1",
+			wantPath:    "/var/lib/vz/template/cache/lxc-template-100.tar.gz",
+		},
+		{
+			name:        "zstd",
+			compression: "zstd",
+			wantVzdump:  "vzdump 100 --compress zstd --dumpdir /tmp",
+			wantLs:      "ls /tmp/vzdump-lxc-100-*.tar.zst 2>/dev/null | head -1",
+			wantPath:    "/var/lib/vz/template/cache/lxc-template-100.tar.zst",
+		},
+		{
+			name:        "lzo",
+			compression: "lzo",
+			wantVzdump:  "vzdump 100 --compress lzo --dumpdir /tmp",
+			wantLs:      "ls /tmp/vzdump-lxc-100-*.tar.lzo 2>/dev/null | head -1",
+			wantPath:    "/var/lib/vz/template/cache/lxc-template-100.tar.lzo",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{
+				BackupDir:         "/var/lib/vz/template/cache",
+				BackupCompression: tt.compression,
+			}
+			ui := &testUi{}
+			// Sequence: vzdump, ls, mkdir, mv
+			comm := &mockCommandRunner{
+				outputs: []string{"", "/tmp/vzdump-lxc-100-2026_0503.dump", "", ""},
+				errors:  []error{nil, nil, nil, nil},
+			}
+
+			state := new(multistep.BasicStateBag)
+			state.Put("config", config)
+			state.Put("ui", ui)
+			state.Put("proxmox_comm", comm)
+			state.Put("ctid", "100")
+
+			step := &stepBackupContainer{}
+			if action := step.Run(context.Background(), state); action != multistep.ActionContinue {
+				t.Fatalf("Expected ActionContinue, got %v", action)
+			}
+
+			if comm.calls[0] != tt.wantVzdump {
+				t.Errorf("Expected vzdump command %q, got %q", tt.wantVzdump, comm.calls[0])
+			}
+			if comm.calls[1] != tt.wantLs {
+				t.Errorf("Expected lookup command %q, got %q", tt.wantLs, comm.calls[1])
+			}
+			got, _ := state.Get("backup_path").(string)
+			if got != tt.wantPath {
+				t.Errorf("Expected backup_path %q, got %q", tt.wantPath, got)
+			}
+		})
+	}
+}
+
+// pigz is a parallel gzip; vzdump ignores --pigz for other algorithms, so the
+// step must not probe for it or pass it when compression is not gzip.
+func TestStepBackupContainer_NonGzipIgnoresPigz(t *testing.T) {
+	config := &Config{
+		BackupDir:         "/var/lib/vz/template/cache",
+		BackupCompression: "zstd",
+		BackupPigz:        4,
+	}
+	ui := &testUi{}
+	// Sequence: vzdump, ls, mkdir, mv -- deliberately NO `command -v pigz`.
+	comm := &mockCommandRunner{
+		outputs: []string{"", "/tmp/vzdump-lxc-100-2026_0503.tar.zst", "", ""},
+		errors:  []error{nil, nil, nil, nil},
+	}
+
+	state := new(multistep.BasicStateBag)
+	state.Put("config", config)
+	state.Put("ui", ui)
+	state.Put("proxmox_comm", comm)
+	state.Put("ctid", "100")
+
+	step := &stepBackupContainer{}
+	if action := step.Run(context.Background(), state); action != multistep.ActionContinue {
+		t.Fatalf("Expected ActionContinue, got %v", action)
+	}
+
+	for _, call := range comm.calls {
+		if strings.Contains(call, "pigz") {
+			t.Errorf("Expected no pigz handling for zstd, got command %q", call)
+		}
+	}
+	expected := "vzdump 100 --compress zstd --dumpdir /tmp"
+	if comm.calls[0] != expected {
+		t.Errorf("Expected vzdump command %q, got %q", expected, comm.calls[0])
+	}
+}
+
 func TestStepBackupContainer_WithPigz(t *testing.T) {
 	config := &Config{
-		BackupDir:  "/var/lib/vz/template/cache",
-		BackupPigz: 4,
+		BackupDir:         "/var/lib/vz/template/cache",
+		BackupCompression: "gzip",
+		BackupPigz:        4,
 	}
 	ui := &testUi{}
 	comm := &mockCommandRunner{
@@ -739,8 +849,9 @@ func TestStepBackupContainer_WithPigz(t *testing.T) {
 
 func TestStepBackupContainer_PigzMissing_FallsBackToGzip(t *testing.T) {
 	config := &Config{
-		BackupDir:  "/var/lib/vz/template/cache",
-		BackupPigz: 4,
+		BackupDir:         "/var/lib/vz/template/cache",
+		BackupCompression: "gzip",
+		BackupPigz:        4,
 	}
 	ui := &testUi{}
 	comm := &mockCommandRunner{
@@ -773,8 +884,9 @@ func TestStepBackupContainer_PigzMissing_FallsBackToGzip(t *testing.T) {
 
 func TestStepBackupContainer_PigzDisabled(t *testing.T) {
 	config := &Config{
-		BackupDir:  "/var/lib/vz/template/cache",
-		BackupPigz: -1, // explicitly disabled (resolved value after Config.Prepare)
+		BackupDir:         "/var/lib/vz/template/cache",
+		BackupCompression: "gzip",
+		BackupPigz:        -1, // explicitly disabled (resolved value after Config.Prepare)
 	}
 	ui := &testUi{}
 	comm := &mockCommandRunner{
