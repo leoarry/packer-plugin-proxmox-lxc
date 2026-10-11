@@ -127,7 +127,7 @@ func isCTIDConflict(stderr string) bool {
 // concurrent builds.
 func ctidRetryBackoff(attempt int) time.Duration {
 	base := 100 * time.Millisecond * time.Duration(attempt+1)
-	jitter := time.Duration(rand.Intn(200)) * time.Millisecond
+	jitter := time.Duration(rand.Intn(200)) * time.Millisecond // #nosec G404 -- CTID retry jitter, not security-sensitive
 	return base + jitter
 }
 
