@@ -86,7 +86,7 @@ described.
   Required if `ssh_key_path` is not set.
 
 - `ssh_key_path` (string) - Path to SSH private key for authentication.
-  Required if `ssh_password` is not set.
+  Required if `ssh_password` is not set. `~` is expanded.
 
 ### Optional
 
@@ -170,10 +170,46 @@ described.
   (GB) or values with units like `2GB`, `2048MB`, `1TB`.
   Default: `"8"` (8 GB)
 
+- `ssh_agent_auth` (bool) - Authenticate to the Proxmox host with the SSH agent
+  (`SSH_AUTH_SOCK` on Unix, the named pipe on Windows). Any configured key file
+  or password remains a fallback. When set, `ssh_password` and `ssh_key_path`
+  are not required.
+  Default: `false`
+
+- `ssh_handshake_attempts` (int) - Maximum number of SSH connection attempts
+  before the build fails. Together with `ssh_timeout`, bounds the connect
+  retry loop.
+  Default: `10`
+
+- `ssh_host_key_check` (string) - How the Proxmox host key is verified, with
+  OpenSSH semantics: `"strict"` aborts unless the key is already recorded in
+  the known-hosts file; `"accept-new"` records an unknown key with a warning
+  and fails the build if it ever changes; `"off"` accepts any key with a
+  warning — not for shared or production hosts.
+  Default: `"accept-new"`
+
+- `ssh_key_passphrase` (string) - Passphrase for the `ssh_key_path` private
+  key, if it is encrypted. Leave empty for unencrypted keys. Can be set with
+  HCL2's `env()` function to keep it out of the configuration file.
+
+- `ssh_known_hosts_file` (string) - Known-hosts file used to verify the host
+  key. `~` is expanded. Created on demand when a key is recorded in
+  `"accept-new"` mode. New keys are rechecked and recorded under a sibling
+  `<resolved-path>.lock` file, shared by symlinked paths. The known-hosts file
+  and parent directory must be writable to record new keys. The lock file
+  remains on disk; do not delete it while builds are running. Verifying an
+  already recorded key needs no lock file. For known hosts, negotiation uses
+  recorded key types, including RSA SHA-2 signatures and host certificates
+  authorized by CA entries. Entries must match the configured hostname and
+  port; an IP-only entry does not authorize a DNS alias. Unknown hosts and
+  `"off"` retain SSH's default algorithm selection.
+  Default: `"~/.ssh/known_hosts"`
+
 - `ssh_port` (int) - SSH port for connecting to the Proxmox host.
   Default: `22`
 
-- `ssh_timeout` (string) - Timeout for SSH connections during provisioning.
+- `ssh_timeout` (string) - Total budget for SSH connection attempts, including
+  DNS, TCP and the handshake. Does not limit provisioning time.
   Example: `"5m"`.
   Default: `"5m"`
 
@@ -190,7 +226,9 @@ described.
 
 The plugin automates the following steps on your Proxmox host:
 
-1. Connects to Proxmox via SSH
+1. Connects to Proxmox via SSH, verifying the host key against the
+   known-hosts file according to `ssh_host_key_check` (`accept-new` by
+   default)
 2. Gets the next available CTID (or uses the configured one)
 3. Creates an LXC container from the specified template
 4. Merges custom LXC config (if provided)

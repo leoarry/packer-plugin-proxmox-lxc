@@ -98,22 +98,26 @@ packer build template.pkr.hcl
 ### Required Fields
 
 | Field | Type | Description |
-|-------|------|-------------|
+| ------- | ------ | ------------- |
 | `ssh_host` | string | Proxmox host IP or hostname |
-| `ssh_user` | string | Proxmox user (e.g., `root@pam`) |
+| `ssh_user` | string | Linux login on the Proxmox host, e.g. `root` (plain SSH login, not the `user@realm` API format) |
 | `template` | string | LXC template to use (e.g., `local:vztmpl/ubuntu-22.04-standard.tar.zst`) |
 
 ### Authentication (One Required)
 
 | Field | Type | Description |
-|-------|------|-------------|
+| ------- | ------ | ------------- |
 | `ssh_password` | string | Proxmox user password |
 | `ssh_key_path` | string | Path to SSH private key |
+| `ssh_key_passphrase` | string | Passphrase for the `ssh_key_path` private key, if it is encrypted. Leave empty for unencrypted keys. Can be set with HCL2's `env()` function |
+| `ssh_agent_auth` | bool | Authenticate with the local SSH agent (`SSH_AUTH_SOCK` on Unix, named pipe on Windows). Any configured key file or password remains a fallback. Defaults to `false` |
+| `ssh_host_key_check` | string | Host key verification policy: `"strict"`, `"accept-new"` (default) or `"off"`. See [SSH host key verification](#ssh-host-key-verification) |
+| `ssh_known_hosts_file` | string | Known-hosts file used to verify the host key. `~` is expanded. Defaults to `"~/.ssh/known_hosts"` |
 
 ### Optional Fields
 
 | Field | Type | Default | Description |
-|-------|------|---------|-------------|
+| ------- | ------ | --------- | ------------- |
 | `ssh_port` | int | `22` | SSH port |
 | `storage` | string | `"local-lvm"` | Storage for the container |
 | `bridge` | string | `"vmbr0"` | Network bridge |
@@ -134,7 +138,52 @@ packer build template.pkr.hcl
 | `backup_pigz` | int | `1` | pigz thread count for faster vzdump compression (`1` = auto, half of cores; `>1` = that many threads; `-1` = explicitly disable, plain gzip). Falls back to plain gzip with a warning if `pigz` isn't installed on the host, instead of failing. Only used when `backup_method` is `"vzdump"` |
 | `ctid` | string | auto-assigned | Specific CTID to use (reused if it already exists). If unset, an auto-assigned CTID that collides with a concurrent build on the same host is automatically retried with a fresh CTID (up to 5 times) instead of failing or reusing the other build's container |
 | `lxc_config` | string | - | Additional LXC config to merge |
-| `ssh_timeout` | string | `"5m"` | SSH connection timeout |
+| `ssh_timeout` | string | `"5m"` | Total budget for SSH connection attempts, including DNS, TCP and the handshake. Does not limit provisioning time |
+| `ssh_handshake_attempts` | int | `10` | Maximum number of SSH connection attempts. Together with `ssh_timeout`, bounds the connect retry loop |
+
+### SSH host key verification
+
+The plugin verifies the Proxmox host's SSH key against a known-hosts file.
+`ssh_host_key_check` controls how unknown or changed keys are handled:
+
+| `ssh_host_key_check` | OpenSSH equivalent | Unknown host | Changed host key |
+| ---------------------- | --------------------- | -------------- | ------------------ |
+| `strict` | `StrictHostKeyChecking=yes` | abort, with the exact `ssh-keyscan` command to run | abort |
+| `accept-new` (default) | `accept-new` | accept, append to the known-hosts file, warn | abort |
+| `off` | `StrictHostKeyChecking=no` | accept, warn | accept, warn |
+
+The known-hosts file defaults to `~/.ssh/known_hosts` (`~` expanded) and is
+created on demand when a key is recorded. `off` is not for shared or production
+hosts: every build warns that the connection is unverified and can be
+intercepted (man-in-the-middle).
+
+For known hosts, negotiation uses the key algorithms recorded for the configured
+hostname and port. This avoids false mismatches when a server also offers other
+key types. RSA keys can use SHA-2 signatures. Host CA entries allow supported
+host certificate types independently of the CA's signing key type; certificate
+validity and signatures are still checked. Changed and revoked keys are rejected.
+Unknown hosts and `off` retain SSH's default algorithm selection.
+
+Entries must match the hostname configured in `ssh_host` and its port. An entry
+for the resolved IP address alone does not authorize a DNS alias.
+
+Recording an unknown key uses an exclusive `<resolved-known-hosts-path>.lock`
+file, followed by a fresh lookup before appending. Symlinked paths share the
+resolved target's lock. The lock file remains on disk; do not delete it while
+builds are running. Recording new keys requires a writable known-hosts file
+and parent directory. Verifying an already recorded key needs no lock file.
+
+> After upgrading, the first build against a host that is not in
+> `~/.ssh/known_hosts` records its key and prints a warning. Verify that key out
+> of band when you can. If a build fails with `knownhosts: key mismatch`, the
+> host key changed: investigate before deleting the entry. On a runner where
+> `~/.ssh/known_hosts` is not writable, point `ssh_known_hosts_file` at a
+> writable file in a writable directory, or use `strict` and record the key yourself.
+>
+> - Configs that set both `ssh_password` and `ssh_key_path`: the key file is
+>   now parsed eagerly when the connection is built, so a stale or unreadable
+>   `ssh_key_path` fails the build even though the password is also configured.
+>   Remove or fix `ssh_key_path`.
 
 ## Examples
 

@@ -18,6 +18,7 @@ make deps               # go mod download && go mod tidy
 ```
 
 Run a single test:
+
 ```bash
 go test ./builder/lxc/ -run TestName -v
 ```
@@ -65,6 +66,17 @@ There are two different targets a command can run against, unified behind the `C
 
 Both also implement the packer SDK's `Communicator` interface (`Start`/`Wait`/`Upload`/`Download`/...) so `commonsteps.StepProvision` can run provisioners inside the container.
 
+### SSH authentication
+
+`stepConnect` builds the SSH client configuration in `ssh_client_config.go`
+(authentication order: agent, then key, then password) and verifies the host key
+through `host_key.go` (`ssh_host_key_check`: `strict`, `accept-new` by default,
+or `off`). `ssh_timeout` and `ssh_handshake_attempts` bound the connect retry
+loop. The plugin keeps its own option names (`ssh_user`, `ssh_key_path`) instead
+of the packer-plugin-sdk ones (`ssh_username`, `ssh_private_key_file`): renaming
+them would break every existing configuration, so adopting the SDK's names is a
+dedicated breaking-change PR, not a drive-by.
+
 ### CTID auto-assignment race
 
 `pvesh get /cluster/nextid` (`fetchNextCTID` in `step_get_ctid.go`) is a point-in-time query, not a reservation — concurrent builds against the same host can be handed the same "next" CTID. `stepCreateContainer` detects this (via `pct status` already succeeding, or `pct create` stderr matching `isCTIDConflict`) and re-rolls a fresh CTID with jittered backoff (`ctidRetryBackoff`), up to `maxCTIDConflictRetries` (5) — but only when the CTID was auto-assigned (`config.CTID == ""`); an explicitly configured CTID is reused, never retried. `concurrency_test.go` covers this behavior directly.
@@ -72,6 +84,7 @@ Both also implement the packer SDK's `Communicator` interface (`Start`/`Wait`/`U
 ### Config
 
 `Config` (`config.go`) is decoded via `packer-plugin-sdk`'s `mapstructure`/HCL2 machinery; `config.hcl2spec.go` is generated (do not hand-edit — run `make generate`). Validation and defaulting happens in `Config.Prepare`. Notable non-obvious fields:
+
 - `backup_method`: `"vzdump"` (default — backs up then destroys the container) vs `"template"` (converts the container in place via `pct template`, container kept as the artifact).
 - `rootfs_size` accepts human sizes (`"2"`, `"2GB"`, `2048MB"`) parsed by `parseSizeToGB`.
 - `backup_pigz`: controls `vzdump` compression threading (`1` = auto/half-cores, `>1` = explicit thread count, `-1` = disable pigz, falls back to gzip with a warning if `pigz` isn't installed).
