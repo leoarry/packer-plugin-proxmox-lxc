@@ -3,7 +3,7 @@ package lxc
 import (
 	"context"
 	"fmt"
-	"os"
+	"io"
 	"time"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
@@ -19,34 +19,62 @@ func (s *stepConnect) Run(ctx context.Context, state multistep.StateBag) multist
 
 	ui.Say("Connecting to Proxmox host...")
 
-	sshConfig := &ssh.ClientConfig{
-		User:            config.SSHUser,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         30 * time.Second,
-	}
-
-	if config.SSHPassword != "" {
-		sshConfig.Auth = []ssh.AuthMethod{ssh.Password(config.SSHPassword)}
-	} else if config.SSHKeyPath != "" {
-		keyData, err := os.ReadFile(config.SSHKeyPath)
-		if err != nil {
-			state.Put("error", fmt.Errorf("failed to read SSH key: %w", err))
-			return multistep.ActionHalt
-		}
-		signer, err := ssh.ParsePrivateKey(keyData)
-		if err != nil {
-			state.Put("error", fmt.Errorf("failed to parse SSH key: %w", err))
-			return multistep.ActionHalt
-		}
-		sshConfig.Auth = []ssh.AuthMethod{ssh.PublicKeys(signer)}
-	}
-
-	addr := fmt.Sprintf("%s:%d", config.SSHHost, config.SSHPort)
-	client, err := ssh.Dial("tcp", addr, sshConfig)
+	timeout, err := time.ParseDuration(config.SSHTimeout)
 	if err != nil {
-		ui.Error(fmt.Sprintf("Failed to connect to Proxmox host: %v", err))
-		state.Put("error", fmt.Errorf("ssh connection failed: %w", err))
+		state.Put("error", fmt.Errorf("invalid ssh_timeout: %w", err))
 		return multistep.ActionHalt
+	}
+
+	address := config.sshAddress()
+	deadline := time.Now().Add(timeout)
+
+	var client *ssh.Client
+	for attempt := 1; ; attempt++ {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			state.Put("error", fmt.Errorf("ssh connection to %s cancelled: %w", address, ctxErr))
+			return multistep.ActionHalt
+		}
+
+		// Bind configuration callbacks and dialing to the same attempt budget.
+		attemptCtx, cancel := sshConnectContext(ctx, deadline)
+		auth, err := buildSSHClientConfig(attemptCtx, config, ui)
+		if err != nil {
+			cancel()
+			state.Put("error", err)
+			return multistep.ActionHalt
+		}
+		if prev, ok := state.GetOk("ssh_agent_conn"); ok {
+			if c, ok := prev.(io.Closer); ok {
+				_ = c.Close()
+			}
+		}
+		if auth.closer != nil {
+			state.Put("ssh_agent_conn", auth.closer)
+		}
+
+		var lastErr error
+		client, lastErr = dialSSH(attemptCtx, address, auth.Config, deadline)
+		cancel()
+		if lastErr == nil {
+			break
+		}
+
+		if attempt >= config.SSHHandshakeAttempts || time.Now().Add(sshRetryInterval).After(deadline) {
+			ui.Error(fmt.Sprintf("Failed to connect to Proxmox host: %v", lastErr))
+			state.Put("error", fmt.Errorf("ssh connection to %s failed after %d attempt(s): %w",
+				address, attempt, lastErr))
+			return multistep.ActionHalt
+		}
+
+		ui.Say(fmt.Sprintf("SSH to %s not ready (attempt %d/%d): %v; retrying in %s...",
+			address, attempt, config.SSHHandshakeAttempts, lastErr, sshRetryInterval))
+
+		select {
+		case <-ctx.Done():
+			state.Put("error", fmt.Errorf("ssh connection to %s cancelled: %w", address, ctx.Err()))
+			return multistep.ActionHalt
+		case <-time.After(sshRetryInterval):
+		}
 	}
 
 	comm := &sshCommunicator{client: &sshClientWrapper{client: client}}
@@ -59,6 +87,11 @@ func (s *stepConnect) Run(ctx context.Context, state multistep.StateBag) multist
 func (s *stepConnect) Cleanup(state multistep.StateBag) {
 	if client, ok := state.GetOk("ssh_client"); ok {
 		if c, ok := client.(*ssh.Client); ok {
+			_ = c.Close()
+		}
+	}
+	if agentConn, ok := state.GetOk("ssh_agent_conn"); ok {
+		if c, ok := agentConn.(interface{ Close() error }); ok {
 			_ = c.Close()
 		}
 	}

@@ -3,6 +3,7 @@ module github.com/leoarry/packer-plugin-proxmox-lxc
 go 1.24.0
 
 require (
+	github.com/gofrs/flock v0.12.1
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/hashicorp/packer-plugin-sdk v0.6.7
 	github.com/zclconf/go-cty v1.16.3
@@ -44,7 +45,6 @@ require (
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.0.5 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
-	github.com/gofrs/flock v0.12.1 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect

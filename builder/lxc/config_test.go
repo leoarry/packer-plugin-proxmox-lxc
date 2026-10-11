@@ -2,7 +2,12 @@ package lxc
 
 import (
 	"fmt"
+	"os"
+	"os/user"
+	"path/filepath"
 	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -966,5 +971,169 @@ func TestConfig_Prepare_WithRawConfig(t *testing.T) {
 	}
 	if config.LXCConfig != "lxc.apparmor.profile: unconfined" {
 		t.Errorf("Expected LXCConfig 'lxc.apparmor.profile: unconfined', got %s", config.LXCConfig)
+	}
+}
+
+func TestConfig_Prepare_SSHHardeningDefaults(t *testing.T) {
+	config := &Config{
+		SSHHost:     "192.168.1.100",
+		SSHUser:     "root",
+		SSHPassword: "secret",
+		Template:    "local:vztmpl/ubuntu-22.04.tar.gz",
+		RootfsSize:  "2",
+	}
+	if _, _, err := config.Prepare(); err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	if config.SSHHostKeyCheck != HostKeyCheckAcceptNew {
+		t.Errorf("SSHHostKeyCheck = %q, want %q", config.SSHHostKeyCheck, HostKeyCheckAcceptNew)
+	}
+	if config.SSHKnownHostsFile != defaultKnownHostsFile {
+		t.Errorf("SSHKnownHostsFile = %q, want %q", config.SSHKnownHostsFile, defaultKnownHostsFile)
+	}
+	if config.SSHHandshakeAttempts != defaultSSHHandshakeAttempts {
+		t.Errorf("SSHHandshakeAttempts = %d, want %d",
+			config.SSHHandshakeAttempts, defaultSSHHandshakeAttempts)
+	}
+}
+
+func TestConfig_Prepare_SSHHardeningValidation(t *testing.T) {
+	base := func() *Config {
+		return &Config{
+			SSHHost:    "192.168.1.100",
+			SSHUser:    "root",
+			SSHKeyPath: "/tmp/key",
+			Template:   "local:vztmpl/x.tar.gz",
+			RootfsSize: "2",
+		}
+	}
+
+	tests := []struct {
+		name    string
+		mutate  func(*Config)
+		wantErr string
+	}{
+		{
+			name:   "agent auth alone is valid",
+			mutate: func(c *Config) { c.SSHKeyPath = ""; c.SSHAgentAuth = true },
+		},
+		{
+			name:    "no auth method at all",
+			mutate:  func(c *Config) { c.SSHKeyPath = "" },
+			wantErr: "either ssh_password, ssh_key_path or ssh_agent_auth is required",
+		},
+		{
+			name:    "passphrase without a key",
+			mutate:  func(c *Config) { c.SSHKeyPath = ""; c.SSHPassword = "x"; c.SSHKeyPassphrase = "y" },
+			wantErr: "ssh_key_passphrase requires ssh_key_path",
+		},
+		{
+			name:    "unknown host key policy",
+			mutate:  func(c *Config) { c.SSHHostKeyCheck = "yes" },
+			wantErr: "ssh_host_key_check must be one of",
+		},
+		{
+			name:    "non-positive handshake attempts",
+			mutate:  func(c *Config) { c.SSHHandshakeAttempts = -1 },
+			wantErr: "ssh_handshake_attempts must be greater than 0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := base()
+			tt.mutate(config)
+			_, _, err := config.Prepare()
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("Prepare() error = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Prepare() error = %v, want it to contain %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestConfig_Prepare_WarnsWhenHostKeyCheckDisabled(t *testing.T) {
+	config := &Config{
+		SSHHost:         "192.168.1.100",
+		SSHUser:         "root",
+		SSHPassword:     "secret",
+		SSHHostKeyCheck: HostKeyCheckOff,
+		Template:        "local:vztmpl/x.tar.gz",
+		RootfsSize:      "2",
+	}
+	warnings, _, err := config.Prepare()
+	if err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	if !strings.Contains(strings.Join(warnings, "\n"), "man-in-the-middle") {
+		t.Errorf("warnings = %v, want one mentioning man-in-the-middle", warnings)
+	}
+}
+
+func TestConfig_Prepare_WarnsOnWorldReadableKey(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission-bit semantics differ on Windows")
+	}
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "id_ed25519")
+	if err := os.WriteFile(keyPath, []byte("not a real key"), 0o644); err != nil { // #nosec G306 -- 0644 is the fixture: Prepare must warn on world-readable keys
+		t.Fatal(err)
+	}
+	// os.WriteFile applies the process umask: under umask 077 the file would
+	// land 0600 and the test would false-fail on hardened runners. Pin the
+	// mode the fixture needs.
+	if err := os.Chmod(keyPath, 0o644); err != nil { // #nosec G302 -- 0644 is the fixture: Prepare must warn on world-readable keys
+		t.Fatal(err)
+	}
+
+	config := &Config{
+		SSHHost:    "192.168.1.100",
+		SSHUser:    "root",
+		SSHKeyPath: keyPath,
+		Template:   "local:vztmpl/x.tar.gz",
+		RootfsSize: "2",
+	}
+	warnings, _, err := config.Prepare()
+	if err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	if !strings.Contains(strings.Join(warnings, "\n"), "readable by other users") {
+		t.Errorf("warnings = %v, want one about key permissions", warnings)
+	}
+}
+
+func TestSSHInterpolateExclude(t *testing.T) {
+	want := []string{"ssh_password", "ssh_key_path", "ssh_key_passphrase"}
+	if !reflect.DeepEqual(sshInterpolateExclude, want) {
+		t.Errorf("sshInterpolateExclude = %v, want %v", sshInterpolateExclude, want)
+	}
+}
+
+func TestExpandUserPath(t *testing.T) {
+	u, err := user.Current()
+	if err != nil {
+		t.Skipf("user.Current: %v", err)
+	}
+
+	got, err := expandUserPath("~/.ssh/id_ed25519")
+	if err != nil {
+		t.Fatalf("expandUserPath() error = %v", err)
+	}
+	if want := filepath.Join(u.HomeDir, ".ssh", "id_ed25519"); got != want {
+		t.Errorf("expandUserPath() = %q, want %q", got, want)
+	}
+
+	absolute := filepath.Join(t.TempDir(), "key")
+	got, err = expandUserPath(absolute)
+	if err != nil {
+		t.Fatalf("expandUserPath() error = %v", err)
+	}
+	if got != absolute {
+		t.Errorf("expandUserPath(%q) = %q, want it unchanged", absolute, got)
 	}
 }

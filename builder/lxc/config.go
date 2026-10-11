@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"maps"
 	"net"
+	"os"
+	"runtime"
 	"slices"
 
 	"strconv"
@@ -13,9 +15,28 @@ import (
 	"time"
 
 	common "github.com/hashicorp/packer-plugin-sdk/common"
+	"github.com/hashicorp/packer-plugin-sdk/pathing"
 	"github.com/hashicorp/packer-plugin-sdk/template/config"
 	"github.com/hashicorp/packer-plugin-sdk/template/interpolate"
 )
+
+// Host key verification policies for ssh_host_key_check. The names mirror
+// OpenSSH's StrictHostKeyChecking semantics; see the README for the mapping.
+const (
+	HostKeyCheckStrict    = "strict"     // StrictHostKeyChecking=yes
+	HostKeyCheckAcceptNew = "accept-new" // StrictHostKeyChecking=accept-new
+	HostKeyCheckOff       = "off"        // StrictHostKeyChecking=no
+)
+
+const (
+	defaultKnownHostsFile       = "~/.ssh/known_hosts"
+	defaultSSHHandshakeAttempts = 10
+)
+
+// sshInterpolateExclude lists the fields that must never be rendered by the
+// legacy template interpolator, because they carry credentials or point at
+// credentials.
+var sshInterpolateExclude = []string{"ssh_password", "ssh_key_path", "ssh_key_passphrase"}
 
 // backupCompressionExt maps each supported vzdump --compress value to the
 // extension vzdump appends to the dump file. It is the single source for both
@@ -89,11 +110,17 @@ type Config struct {
 	common.PackerConfig `mapstructure:",squash"`
 
 	// SSH connection settings.
-	SSHHost     string `mapstructure:"ssh_host" required:"true"`
-	SSHPort     int    `mapstructure:"ssh_port" default:"22"`
-	SSHUser     string `mapstructure:"ssh_user" required:"true"`
-	SSHPassword string `mapstructure:"ssh_password"`
-	SSHKeyPath  string `mapstructure:"ssh_key_path"`
+	SSHHost          string `mapstructure:"ssh_host" required:"true"`
+	SSHPort          int    `mapstructure:"ssh_port" default:"22"`
+	SSHUser          string `mapstructure:"ssh_user" required:"true"`
+	SSHPassword      string `mapstructure:"ssh_password"`
+	SSHKeyPath       string `mapstructure:"ssh_key_path"`
+	SSHKeyPassphrase string `mapstructure:"ssh_key_passphrase"`
+	SSHAgentAuth     bool   `mapstructure:"ssh_agent_auth"`
+
+	SSHHostKeyCheck      string `mapstructure:"ssh_host_key_check" default:"accept-new"`
+	SSHKnownHostsFile    string `mapstructure:"ssh_known_hosts_file" default:"~/.ssh/known_hosts"`
+	SSHHandshakeAttempts int    `mapstructure:"ssh_handshake_attempts" default:"10"`
 
 	// LXC container settings.
 	Template     string `mapstructure:"template" required:"true"`
@@ -124,7 +151,8 @@ type Config struct {
 	CTID              string `mapstructure:"ctid"`
 	LXCConfig         string `mapstructure:"lxc_config"`
 
-	// SSH timeout for provisioning.
+	// Total budget for SSH connection attempts, including DNS, TCP and the
+	// handshake. Does not limit provisioning time.
 	SSHTimeout string `mapstructure:"ssh_timeout" default:"5m"`
 }
 
@@ -176,6 +204,15 @@ func (c *Config) applyDefaults() {
 	if c.NetworkIP == "" {
 		c.NetworkIP = "dhcp"
 	}
+	if c.SSHHostKeyCheck == "" {
+		c.SSHHostKeyCheck = HostKeyCheckAcceptNew
+	}
+	if c.SSHKnownHostsFile == "" {
+		c.SSHKnownHostsFile = defaultKnownHostsFile
+	}
+	if c.SSHHandshakeAttempts == 0 {
+		c.SSHHandshakeAttempts = defaultSSHHandshakeAttempts
+	}
 }
 
 // Prepare validates the configuration.
@@ -186,10 +223,7 @@ func (c *Config) Prepare(raws ...interface{}) ([]string, []string, error) {
 		Interpolate:        true,
 		InterpolateContext: &interpolate.Context{},
 		InterpolateFilter: &interpolate.RenderFilter{
-			Exclude: []string{
-				"ssh_password",
-				"ssh_key_path",
-			},
+			Exclude: sshInterpolateExclude,
 		},
 	}, raws...)
 	if err != nil {
@@ -206,9 +240,28 @@ func (c *Config) Prepare(raws ...interface{}) ([]string, []string, error) {
 	if c.SSHUser == "" {
 		return nil, nil, fmt.Errorf("ssh_user is required")
 	}
-	if c.SSHPassword == "" && c.SSHKeyPath == "" {
-		return nil, nil, fmt.Errorf("either ssh_password or ssh_key_path is required")
+	if c.SSHPassword == "" && c.SSHKeyPath == "" && !c.SSHAgentAuth {
+		return nil, nil, fmt.Errorf("either ssh_password, ssh_key_path or ssh_agent_auth is required")
 	}
+	if c.SSHKeyPassphrase != "" && c.SSHKeyPath == "" {
+		return nil, nil, fmt.Errorf("ssh_key_passphrase requires ssh_key_path")
+	}
+	if c.SSHHostKeyCheck != HostKeyCheckStrict &&
+		c.SSHHostKeyCheck != HostKeyCheckAcceptNew &&
+		c.SSHHostKeyCheck != HostKeyCheckOff {
+		return nil, nil, fmt.Errorf("ssh_host_key_check must be one of %s",
+			strings.Join([]string{HostKeyCheckAcceptNew, HostKeyCheckOff, HostKeyCheckStrict}, ", "))
+	}
+	if c.SSHHandshakeAttempts < 1 {
+		return nil, nil, fmt.Errorf("ssh_handshake_attempts must be greater than 0")
+	}
+	if c.SSHHostKeyCheck == HostKeyCheckOff {
+		warnings = append(warnings, fmt.Sprintf(
+			"ssh_host_key_check is %q: the SSH connection to the Proxmox host is not protected "+
+				"against a man-in-the-middle. Use %q unless this is a throwaway environment.",
+			HostKeyCheckOff, HostKeyCheckAcceptNew))
+	}
+	warnings = append(warnings, insecureKeyPermissionsWarnings(c)...)
 	if c.Template == "" {
 		return nil, nil, fmt.Errorf("template is required")
 	}
@@ -316,4 +369,38 @@ func (c *Config) NetworkConfig() string {
 	}
 
 	return net0
+}
+
+// expandUserPath resolves a leading ~ the way the rest of Packer does. Note
+// pathing.ExpandUser resolves it through the password database (getpwuid), not
+// through $HOME.
+func expandUserPath(path string) (string, error) {
+	if path == "" {
+		return path, nil
+	}
+	expanded, err := pathing.ExpandUser(path)
+	if err != nil {
+		return "", fmt.Errorf("cannot expand %q: %w", path, err)
+	}
+	return expanded, nil
+}
+
+// insecureKeyPermissionsWarnings warns about a private key file that other users
+// can read, which OpenSSH refuses outright. A missing or unreadable file is not
+// reported here: that error surfaces when the build tries to use it.
+func insecureKeyPermissionsWarnings(c *Config) []string {
+	if runtime.GOOS == "windows" || c.SSHKeyPath == "" {
+		return nil
+	}
+	path, err := expandUserPath(c.SSHKeyPath)
+	if err != nil {
+		return nil
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Mode()&0o077 == 0 {
+		return nil
+	}
+	return []string{fmt.Sprintf(
+		"SSH private key %s is readable by other users (%s); ssh refuses such keys, consider chmod 600",
+		path, info.Mode().Perm())}
 }

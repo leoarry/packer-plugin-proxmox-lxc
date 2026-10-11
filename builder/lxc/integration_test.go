@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -18,29 +19,42 @@ import (
 // dialProxmoxSSH opens a direct SSH connection to the Proxmox host,
 // independent of the Builder's internal communicator, so tests can run
 // their own cleanup commands after Builder.Run returns.
+//
+// It goes through the production host-key verification; two extra
+// environment variables configure it:
+//   - PROXMOX_HOST_KEY_CHECK: ssh_host_key_check policy for these tests
+//     (default: accept-new)
+//   - PROXMOX_KNOWN_HOSTS_FILE: known_hosts file recording the host keys
+//     (default: packer-proxmox-lxc-known_hosts in the system temp dir)
 func dialProxmoxSSH(host string, port int, user, password, keyPath string) (*ssh.Client, error) {
-	sshConfig := &ssh.ClientConfig{
-		User:            user,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         30 * time.Second,
+	ctx, cancel := sshConnectContext(context.Background(), time.Now().Add(30*time.Second))
+	defer cancel()
+	cfg := &Config{
+		SSHHost:              host,
+		SSHPort:              port,
+		SSHUser:              user,
+		SSHPassword:          password,
+		SSHKeyPath:           keyPath,
+		SSHHostKeyCheck:      envOrDefault("PROXMOX_HOST_KEY_CHECK", HostKeyCheckAcceptNew),
+		SSHKnownHostsFile:    envOrDefault("PROXMOX_KNOWN_HOSTS_FILE", filepath.Join(os.TempDir(), "packer-proxmox-lxc-known_hosts")),
+		SSHTimeout:           "30s",
+		SSHHandshakeAttempts: 3,
 	}
-
-	if password != "" {
-		sshConfig.Auth = []ssh.AuthMethod{ssh.Password(password)}
-	} else {
-		keyData, err := os.ReadFile(keyPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read SSH key: %w", err)
-		}
-		signer, err := ssh.ParsePrivateKey(keyData)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse SSH key: %w", err)
-		}
-		sshConfig.Auth = []ssh.AuthMethod{ssh.PublicKeys(signer)}
+	auth, err := buildSSHClientConfig(ctx, cfg, &testUi{})
+	if err != nil {
+		return nil, err
 	}
+	if auth.closer != nil {
+		defer func() { _ = auth.closer.Close() }()
+	}
+	return dialSSH(ctx, cfg.sshAddress(), auth.Config, time.Now().Add(30*time.Second))
+}
 
-	addr := fmt.Sprintf("%s:%d", host, port)
-	return ssh.Dial("tcp", addr, sshConfig)
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
 
 // runCommandsOnHost opens one SSH connection to the Proxmox host and runs

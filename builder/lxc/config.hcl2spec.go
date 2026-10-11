@@ -10,41 +10,46 @@ import (
 // FlatConfig is an auto-generated flat version of Config.
 // Where the contents of a field with a `mapstructure:,squash` tag are bubbled up.
 type FlatConfig struct {
-	PackerBuildName     *string           `mapstructure:"packer_build_name" cty:"packer_build_name" hcl:"packer_build_name"`
-	PackerBuilderType   *string           `mapstructure:"packer_builder_type" cty:"packer_builder_type" hcl:"packer_builder_type"`
-	PackerCoreVersion   *string           `mapstructure:"packer_core_version" cty:"packer_core_version" hcl:"packer_core_version"`
-	PackerDebug         *bool             `mapstructure:"packer_debug" cty:"packer_debug" hcl:"packer_debug"`
-	PackerForce         *bool             `mapstructure:"packer_force" cty:"packer_force" hcl:"packer_force"`
-	PackerOnError       *string           `mapstructure:"packer_on_error" cty:"packer_on_error" hcl:"packer_on_error"`
-	PackerUserVars      map[string]string `mapstructure:"packer_user_variables" cty:"packer_user_variables" hcl:"packer_user_variables"`
-	PackerSensitiveVars []string          `mapstructure:"packer_sensitive_variables" cty:"packer_sensitive_variables" hcl:"packer_sensitive_variables"`
-	SSHHost             *string           `mapstructure:"ssh_host" required:"true" cty:"ssh_host" hcl:"ssh_host"`
-	SSHPort             *int              `mapstructure:"ssh_port" default:"22" cty:"ssh_port" hcl:"ssh_port"`
-	SSHUser             *string           `mapstructure:"ssh_user" required:"true" cty:"ssh_user" hcl:"ssh_user"`
-	SSHPassword         *string           `mapstructure:"ssh_password" cty:"ssh_password" hcl:"ssh_password"`
-	SSHKeyPath          *string           `mapstructure:"ssh_key_path" cty:"ssh_key_path" hcl:"ssh_key_path"`
-	Template            *string           `mapstructure:"template" required:"true" cty:"template" hcl:"template"`
-	Storage             *string           `mapstructure:"storage" default:"local-lvm" cty:"storage" hcl:"storage"`
-	Bridge              *string           `mapstructure:"bridge" default:"vmbr0" cty:"bridge" hcl:"bridge"`
-	Memory              *int              `mapstructure:"memory" default:"2048" cty:"memory" hcl:"memory"`
-	Cores               *int              `mapstructure:"cores" default:"2" cty:"cores" hcl:"cores"`
-	RootPassword        *string           `mapstructure:"root_password" default:"changeme" cty:"root_password" hcl:"root_password"`
-	Unprivileged        *bool             `mapstructure:"unprivileged" default:"true" cty:"unprivileged" hcl:"unprivileged"`
-	Features            *string           `mapstructure:"features" default:"nesting=1" cty:"features" hcl:"features"`
-	RootfsSize          *string           `mapstructure:"rootfs_size" default:"8" cty:"rootfs_size" hcl:"rootfs_size"`
-	Vlan                *int              `mapstructure:"vlan" cty:"vlan" hcl:"vlan"`
-	NetworkIP           *string           `mapstructure:"network_ip" default:"dhcp" cty:"network_ip" hcl:"network_ip"`
-	Gateway             *string           `mapstructure:"gateway" cty:"gateway" hcl:"gateway"`
-	Firewall            *bool             `mapstructure:"firewall" cty:"firewall" hcl:"firewall"`
-	NetworkMTU          *int              `mapstructure:"network_mtu" cty:"network_mtu" hcl:"network_mtu"`
-	BackupName          *string           `mapstructure:"backup_name" cty:"backup_name" hcl:"backup_name"`
-	BackupDir           *string           `mapstructure:"backup_dir" default:"/var/lib/vz/template/cache" cty:"backup_dir" hcl:"backup_dir"`
-	BackupCompression   *string           `mapstructure:"backup_compression" default:"gzip" cty:"backup_compression" hcl:"backup_compression"`
-	BackupMethod        *string           `mapstructure:"backup_method" default:"vzdump" cty:"backup_method" hcl:"backup_method"`
-	BackupPigz          *int              `mapstructure:"backup_pigz" default:"1" cty:"backup_pigz" hcl:"backup_pigz"`
-	CTID                *string           `mapstructure:"ctid" cty:"ctid" hcl:"ctid"`
-	LXCConfig           *string           `mapstructure:"lxc_config" cty:"lxc_config" hcl:"lxc_config"`
-	SSHTimeout          *string           `mapstructure:"ssh_timeout" default:"5m" cty:"ssh_timeout" hcl:"ssh_timeout"`
+	PackerBuildName      *string           `mapstructure:"packer_build_name" cty:"packer_build_name" hcl:"packer_build_name"`
+	PackerBuilderType    *string           `mapstructure:"packer_builder_type" cty:"packer_builder_type" hcl:"packer_builder_type"`
+	PackerCoreVersion    *string           `mapstructure:"packer_core_version" cty:"packer_core_version" hcl:"packer_core_version"`
+	PackerDebug          *bool             `mapstructure:"packer_debug" cty:"packer_debug" hcl:"packer_debug"`
+	PackerForce          *bool             `mapstructure:"packer_force" cty:"packer_force" hcl:"packer_force"`
+	PackerOnError        *string           `mapstructure:"packer_on_error" cty:"packer_on_error" hcl:"packer_on_error"`
+	PackerUserVars       map[string]string `mapstructure:"packer_user_variables" cty:"packer_user_variables" hcl:"packer_user_variables"`
+	PackerSensitiveVars  []string          `mapstructure:"packer_sensitive_variables" cty:"packer_sensitive_variables" hcl:"packer_sensitive_variables"`
+	SSHHost              *string           `mapstructure:"ssh_host" required:"true" cty:"ssh_host" hcl:"ssh_host"`
+	SSHPort              *int              `mapstructure:"ssh_port" default:"22" cty:"ssh_port" hcl:"ssh_port"`
+	SSHUser              *string           `mapstructure:"ssh_user" required:"true" cty:"ssh_user" hcl:"ssh_user"`
+	SSHPassword          *string           `mapstructure:"ssh_password" cty:"ssh_password" hcl:"ssh_password"`
+	SSHKeyPath           *string           `mapstructure:"ssh_key_path" cty:"ssh_key_path" hcl:"ssh_key_path"`
+	SSHKeyPassphrase     *string           `mapstructure:"ssh_key_passphrase" cty:"ssh_key_passphrase" hcl:"ssh_key_passphrase"`
+	SSHAgentAuth         *bool             `mapstructure:"ssh_agent_auth" cty:"ssh_agent_auth" hcl:"ssh_agent_auth"`
+	SSHHostKeyCheck      *string           `mapstructure:"ssh_host_key_check" default:"accept-new" cty:"ssh_host_key_check" hcl:"ssh_host_key_check"`
+	SSHKnownHostsFile    *string           `mapstructure:"ssh_known_hosts_file" default:"~/.ssh/known_hosts" cty:"ssh_known_hosts_file" hcl:"ssh_known_hosts_file"`
+	SSHHandshakeAttempts *int              `mapstructure:"ssh_handshake_attempts" default:"10" cty:"ssh_handshake_attempts" hcl:"ssh_handshake_attempts"`
+	Template             *string           `mapstructure:"template" required:"true" cty:"template" hcl:"template"`
+	Storage              *string           `mapstructure:"storage" default:"local-lvm" cty:"storage" hcl:"storage"`
+	Bridge               *string           `mapstructure:"bridge" default:"vmbr0" cty:"bridge" hcl:"bridge"`
+	Memory               *int              `mapstructure:"memory" default:"2048" cty:"memory" hcl:"memory"`
+	Cores                *int              `mapstructure:"cores" default:"2" cty:"cores" hcl:"cores"`
+	RootPassword         *string           `mapstructure:"root_password" default:"changeme" cty:"root_password" hcl:"root_password"`
+	Unprivileged         *bool             `mapstructure:"unprivileged" default:"true" cty:"unprivileged" hcl:"unprivileged"`
+	Features             *string           `mapstructure:"features" default:"nesting=1" cty:"features" hcl:"features"`
+	RootfsSize           *string           `mapstructure:"rootfs_size" default:"8" cty:"rootfs_size" hcl:"rootfs_size"`
+	Vlan                 *int              `mapstructure:"vlan" cty:"vlan" hcl:"vlan"`
+	NetworkIP            *string           `mapstructure:"network_ip" default:"dhcp" cty:"network_ip" hcl:"network_ip"`
+	Gateway              *string           `mapstructure:"gateway" cty:"gateway" hcl:"gateway"`
+	Firewall             *bool             `mapstructure:"firewall" cty:"firewall" hcl:"firewall"`
+	NetworkMTU           *int              `mapstructure:"network_mtu" cty:"network_mtu" hcl:"network_mtu"`
+	BackupName           *string           `mapstructure:"backup_name" cty:"backup_name" hcl:"backup_name"`
+	BackupDir            *string           `mapstructure:"backup_dir" default:"/var/lib/vz/template/cache" cty:"backup_dir" hcl:"backup_dir"`
+	BackupCompression    *string           `mapstructure:"backup_compression" default:"gzip" cty:"backup_compression" hcl:"backup_compression"`
+	BackupMethod         *string           `mapstructure:"backup_method" default:"vzdump" cty:"backup_method" hcl:"backup_method"`
+	BackupPigz           *int              `mapstructure:"backup_pigz" default:"1" cty:"backup_pigz" hcl:"backup_pigz"`
+	CTID                 *string           `mapstructure:"ctid" cty:"ctid" hcl:"ctid"`
+	LXCConfig            *string           `mapstructure:"lxc_config" cty:"lxc_config" hcl:"lxc_config"`
+	SSHTimeout           *string           `mapstructure:"ssh_timeout" default:"5m" cty:"ssh_timeout" hcl:"ssh_timeout"`
 }
 
 // FlatMapstructure returns a new FlatConfig.
@@ -72,6 +77,11 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"ssh_user":                   &hcldec.AttrSpec{Name: "ssh_user", Type: cty.String, Required: false},
 		"ssh_password":               &hcldec.AttrSpec{Name: "ssh_password", Type: cty.String, Required: false},
 		"ssh_key_path":               &hcldec.AttrSpec{Name: "ssh_key_path", Type: cty.String, Required: false},
+		"ssh_key_passphrase":         &hcldec.AttrSpec{Name: "ssh_key_passphrase", Type: cty.String, Required: false},
+		"ssh_agent_auth":             &hcldec.AttrSpec{Name: "ssh_agent_auth", Type: cty.Bool, Required: false},
+		"ssh_host_key_check":         &hcldec.AttrSpec{Name: "ssh_host_key_check", Type: cty.String, Required: false},
+		"ssh_known_hosts_file":       &hcldec.AttrSpec{Name: "ssh_known_hosts_file", Type: cty.String, Required: false},
+		"ssh_handshake_attempts":     &hcldec.AttrSpec{Name: "ssh_handshake_attempts", Type: cty.Number, Required: false},
 		"template":                   &hcldec.AttrSpec{Name: "template", Type: cty.String, Required: false},
 		"storage":                    &hcldec.AttrSpec{Name: "storage", Type: cty.String, Required: false},
 		"bridge":                     &hcldec.AttrSpec{Name: "bridge", Type: cty.String, Required: false},
