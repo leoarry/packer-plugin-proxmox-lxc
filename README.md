@@ -133,7 +133,7 @@ packer build template.pkr.hcl
 | `backup_dir` | string | `"/var/lib/vz/template/cache"` | Backup destination directory. Only used when `backup_method` is `"vzdump"` |
 | `backup_pigz` | int | `1` | pigz thread count for faster vzdump compression (`1` = auto, half of cores; `>1` = that many threads; `-1` = explicitly disable, plain gzip). Falls back to plain gzip with a warning if `pigz` isn't installed on the host, instead of failing. Only used when `backup_method` is `"vzdump"` |
 | `ctid` | string | auto-assigned | Specific CTID to use (reused if it already exists). If unset, an auto-assigned CTID that collides with a concurrent build on the same host is automatically retried with a fresh CTID (up to 5 times) instead of failing or reusing the other build's container |
-| `lxc_config` | string | - | Additional LXC config to merge |
+| `lxc_config` | string | - | Additional LXC config to merge (newline-delimited, see [Proxmox VE Container Configuration](https://pve.proxmox.com/wiki/Manual:_pct.conf#_options) options) |
 | `ssh_timeout` | string | `"5m"` | SSH connection timeout |
 
 ## Examples
