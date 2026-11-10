@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"reflect"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -968,5 +970,42 @@ func TestConfig_Prepare_WithRawConfig(t *testing.T) {
 	}
 	if config.LXCConfig != "lxc.apparmor.profile: unconfined" {
 		t.Errorf("Expected LXCConfig 'lxc.apparmor.profile: unconfined', got %s", config.LXCConfig)
+	}
+}
+
+func TestConfig_Prepare_SSHHostKeyOptions(t *testing.T) {
+	base := func() *Config {
+		return &Config{
+			SSHHost:     "192.168.1.100",
+			SSHUser:     "root",
+			SSHPassword: "secret",
+			Template:    "local:vztmpl/ubuntu-22.04.tar.gz",
+			RootfsSize:  "2",
+		}
+	}
+
+	c := base()
+	warnings, _, err := c.Prepare(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(warnings, func(w string) bool { return strings.Contains(w, "ssh_known_hosts_file") }) {
+		t.Errorf("expected a warning about ssh_known_hosts_file, got %v", warnings)
+	}
+
+	c = base()
+	c.SSHKnownHostsFile = "/tmp/known_hosts"
+	warnings, _, err = c.Prepare(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.ContainsFunc(warnings, func(w string) bool { return strings.Contains(w, "ssh_known_hosts_file") }) {
+		t.Errorf("unexpected ssh_known_hosts_file warning: %v", warnings)
+	}
+
+	c = base()
+	c.SSHKeyPassphrase = "x"
+	if _, _, err := c.Prepare(nil); err == nil {
+		t.Error("expected error for ssh_key_passphrase without ssh_key_path")
 	}
 }

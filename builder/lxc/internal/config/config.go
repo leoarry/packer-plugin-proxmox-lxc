@@ -96,6 +96,11 @@ type Config struct {
 	SSHUser     string `mapstructure:"ssh_user" required:"true"`
 	SSHPassword string `mapstructure:"ssh_password"`
 	SSHKeyPath  string `mapstructure:"ssh_key_path"`
+	// Passphrase for an encrypted ssh_key_path.
+	SSHKeyPassphrase string `mapstructure:"ssh_key_passphrase"`
+	// If set, the Proxmox host key is verified against this known_hosts file.
+	// If unset, the host key is not verified.
+	SSHKnownHostsFile string `mapstructure:"ssh_known_hosts_file"`
 
 	// LXC container settings.
 	Template     string `mapstructure:"template" required:"true"`
@@ -126,7 +131,7 @@ type Config struct {
 	CTID              string `mapstructure:"ctid"`
 	LXCConfig         string `mapstructure:"lxc_config"`
 
-	// SSH timeout for provisioning.
+	// Timeout for establishing the SSH connection to the Proxmox host.
 	SSHTimeout string `mapstructure:"ssh_timeout" default:"5m"`
 }
 
@@ -191,6 +196,7 @@ func (c *Config) Prepare(raws ...interface{}) ([]string, []string, error) {
 			Exclude: []string{
 				"ssh_password",
 				"ssh_key_path",
+				"ssh_key_passphrase",
 			},
 		},
 	}, raws...)
@@ -210,6 +216,12 @@ func (c *Config) Prepare(raws ...interface{}) ([]string, []string, error) {
 	}
 	if c.SSHPassword == "" && c.SSHKeyPath == "" {
 		return nil, nil, fmt.Errorf("either ssh_password or ssh_key_path is required")
+	}
+	if c.SSHKeyPassphrase != "" && c.SSHKeyPath == "" {
+		return nil, nil, fmt.Errorf("ssh_key_passphrase requires ssh_key_path")
+	}
+	if c.SSHKnownHostsFile == "" {
+		warnings = append(warnings, "ssh_known_hosts_file is not set: the Proxmox host key will not be verified")
 	}
 	if c.Template == "" {
 		return nil, nil, fmt.Errorf("template is required")

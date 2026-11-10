@@ -115,6 +115,8 @@ packer build template.pkr.hcl
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `ssh_port` | int | `22` | SSH port |
+| `ssh_key_passphrase` | string | - | Passphrase for an encrypted `ssh_key_path` |
+| `ssh_known_hosts_file` | string | - | `known_hosts` file used to verify the Proxmox host key. The build fails if the host is missing or the key doesn't match. If unset, the host key is not verified (a warning is printed) |
 | `storage` | string | `"local-lvm"` | Storage for the container |
 | `bridge` | string | `"vmbr0"` | Network bridge |
 | `vlan` | int | - | VLAN tag for the bridge (1-4094). Leave unset for no VLAN tagging |
@@ -134,7 +136,7 @@ packer build template.pkr.hcl
 | `backup_pigz` | int | `1` | pigz thread count for faster vzdump compression (`1` = auto, half of cores; `>1` = that many threads; `-1` = explicitly disable, plain gzip). Falls back to plain gzip with a warning if `pigz` isn't installed on the host, instead of failing. Only used when `backup_method` is `"vzdump"` |
 | `ctid` | string | auto-assigned | Specific CTID to use (reused if it already exists). If unset, an auto-assigned CTID that collides with a concurrent build on the same host is automatically retried with a fresh CTID (up to 5 times) instead of failing or reusing the other build's container |
 | `lxc_config` | string | - | Additional LXC config to merge (newline-delimited, see [Proxmox VE Container Configuration](https://pve.proxmox.com/wiki/Manual:_pct.conf#_options) options) |
-| `ssh_timeout` | string | `"5m"` | SSH connection timeout |
+| `ssh_timeout` | string | `"5m"` | Timeout for establishing the SSH connection to the Proxmox host |
 
 ## Examples
 
@@ -209,7 +211,12 @@ Notes:
 - `ssh_user` must be a real Linux login (e.g. `root`), **not** Proxmox's
   `user@realm` API/GUI format (`root@pam`) — this plugin connects over
   plain SSH, not the Proxmox API.
-- Use `PROXMOX_KEY_PATH` instead of `PROXMOX_PASSWORD` for key-based auth.
+- Use `PROXMOX_KEY_PATH` instead of `PROXMOX_PASSWORD` for key-based auth,
+  plus `PROXMOX_KEY_PASSPHRASE` if the key is encrypted.
+- The SSH tests (`TestIntegration_SSH*`, in `builder/lxc/internal/steps`) run
+  with the same command. They read the host's public keys and check
+  `ssh_known_hosts_file` against the real sshd (matching key, each key type
+  alone, wrong key, unknown host). They only open SSH connections.
 - `RUN` narrows which tests run (default: all `TestIntegration*`), e.g.
   `RUN=TestIntegration_Connect` to just check connectivity, or
   `RUN=TestIntegration_FullBuild_TemplateMethod` for just the CT template
