@@ -1,6 +1,8 @@
 //go:generate packer-sdc mapstructure-to-hcl2 -type Config
 
-package lxc
+// Package config holds the proxmox-lxc builder configuration: decoding,
+// defaults and validation.
+package config
 
 import (
 	"fmt"
@@ -13,15 +15,15 @@ import (
 	"time"
 
 	common "github.com/hashicorp/packer-plugin-sdk/common"
-	"github.com/hashicorp/packer-plugin-sdk/template/config"
+	sdkconfig "github.com/hashicorp/packer-plugin-sdk/template/config"
 	"github.com/hashicorp/packer-plugin-sdk/template/interpolate"
 )
 
-// backupCompressionExt maps each supported vzdump --compress value to the
+// BackupCompressionExt maps each supported vzdump --compress value to the
 // extension vzdump appends to the dump file. It is the single source for both
 // config validation and the backup step's file discovery, so the accepted set
 // and the expected filenames cannot drift apart.
-var backupCompressionExt = map[string]string{
+var BackupCompressionExt = map[string]string{
 	"gzip": "tar.gz",
 	"lzo":  "tar.lzo",
 	"zstd": "tar.zst",
@@ -182,7 +184,7 @@ func (c *Config) applyDefaults() {
 func (c *Config) Prepare(raws ...interface{}) ([]string, []string, error) {
 	var warnings []string
 
-	err := config.Decode(c, &config.DecodeOpts{
+	err := sdkconfig.Decode(c, &sdkconfig.DecodeOpts{
 		Interpolate:        true,
 		InterpolateContext: &interpolate.Context{},
 		InterpolateFilter: &interpolate.RenderFilter{
@@ -272,9 +274,9 @@ func (c *Config) Prepare(raws ...interface{}) ([]string, []string, error) {
 		return nil, nil, fmt.Errorf("backup_pigz must be -1 (disable pigz) or greater")
 	}
 
-	if _, ok := backupCompressionExt[c.BackupCompression]; !ok {
+	if _, ok := BackupCompressionExt[c.BackupCompression]; !ok {
 		return nil, nil, fmt.Errorf("backup_compression must be one of %s",
-			strings.Join(slices.Sorted(maps.Keys(backupCompressionExt)), ", "))
+			strings.Join(slices.Sorted(maps.Keys(BackupCompressionExt)), ", "))
 	}
 
 	return warnings, nil, nil

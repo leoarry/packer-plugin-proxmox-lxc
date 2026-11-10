@@ -1,4 +1,4 @@
-package lxc
+package remote
 
 import (
 	"bytes"
@@ -6,9 +6,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"golang.org/x/crypto/ssh"
+
+	"github.com/leoarry/packer-plugin-proxmox-lxc/builder/lxc/internal/testutil"
 )
 
 // Test_pctExecCommunicator_Start tests the Start method
@@ -45,11 +46,11 @@ func Test_pctExecCommunicator_Start(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockRunner := &mockCommandRunner{
-				outputs: []string{tt.mockOut},
-				errors:  []error{tt.mockErr},
+			mockRunner := &testutil.MockRunner{
+				Outputs: []string{tt.mockOut},
+				Errors:  []error{tt.mockErr},
 			}
-			comm := &pctExecCommunicator{
+			comm := &PctExecCommunicator{
 				ctid:   tt.ctid,
 				parent: mockRunner,
 			}
@@ -69,11 +70,11 @@ func Test_pctExecCommunicator_Start(t *testing.T) {
 
 // Test_pctExecCommunicator_Start_CommandEscaping tests that special characters are properly escaped
 func Test_pctExecCommunicator_Start_CommandEscaping(t *testing.T) {
-	mockRunner := &mockCommandRunner{
-		outputs: []string{""},
-		errors:  []error{nil},
+	mockRunner := &testutil.MockRunner{
+		Outputs: []string{""},
+		Errors:  []error{nil},
 	}
-	comm := &pctExecCommunicator{
+	comm := &PctExecCommunicator{
 		ctid:   "100",
 		parent: mockRunner,
 	}
@@ -117,11 +118,11 @@ func Test_pctExecCommunicator_Upload(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockRunner := &mockCommandRunner{
-				outputs: tt.mockOutputs,
-				errors:  tt.mockErrors,
+			mockRunner := &testutil.MockRunner{
+				Outputs: tt.mockOutputs,
+				Errors:  tt.mockErrors,
 			}
-			comm := &pctExecCommunicator{
+			comm := &PctExecCommunicator{
 				ctid:   "100",
 				parent: mockRunner,
 			}
@@ -157,9 +158,9 @@ func (e *errorReader) Close() error {
 
 // Test_pctExecCommunicator_UploadDir tests that UploadDir returns error (not implemented)
 func Test_pctExecCommunicator_UploadDir(t *testing.T) {
-	comm := &pctExecCommunicator{
+	comm := &PctExecCommunicator{
 		ctid:   "100",
-		parent: &mockCommandRunner{},
+		parent: &testutil.MockRunner{},
 	}
 
 	err := comm.UploadDir("/dst", "/src", nil)
@@ -170,9 +171,9 @@ func Test_pctExecCommunicator_UploadDir(t *testing.T) {
 
 // Test_pctExecCommunicator_Download tests that Download returns error (not implemented)
 func Test_pctExecCommunicator_Download(t *testing.T) {
-	comm := &pctExecCommunicator{
+	comm := &PctExecCommunicator{
 		ctid:   "100",
-		parent: &mockCommandRunner{},
+		parent: &testutil.MockRunner{},
 	}
 
 	err := comm.Download("/src", &bytes.Buffer{})
@@ -183,9 +184,9 @@ func Test_pctExecCommunicator_Download(t *testing.T) {
 
 // Test_pctExecCommunicator_DownloadDir tests that DownloadDir returns error (not implemented)
 func Test_pctExecCommunicator_DownloadDir(t *testing.T) {
-	comm := &pctExecCommunicator{
+	comm := &PctExecCommunicator{
 		ctid:   "100",
-		parent: &mockCommandRunner{},
+		parent: &testutil.MockRunner{},
 	}
 
 	err := comm.DownloadDir("/src", "/dst", nil)
@@ -223,7 +224,7 @@ func Test_sshCommunicator_RunCommand(t *testing.T) {
 			mockProvider := &mockSSHSessionProvider{
 				session: mockSession,
 			}
-			comm := &sshCommunicator{
+			comm := &SSHCommunicator{
 				client: mockProvider,
 			}
 
@@ -266,7 +267,7 @@ func Test_sshCommunicator_Start(t *testing.T) {
 			mockProvider := &mockSSHSessionProvider{
 				session: mockSession,
 			}
-			comm := &sshCommunicator{
+			comm := &SSHCommunicator{
 				client: mockProvider,
 			}
 
@@ -285,99 +286,66 @@ func Test_sshCommunicator_Start(t *testing.T) {
 
 // Test_communicator_Interface tests that both communicators implement the Communicator interface
 func Test_communicator_Interface(t *testing.T) {
-	// Verify sshCommunicator implements Communicator
-	var _ Communicator = &sshCommunicator{}
+	// Verify SSHCommunicator implements Communicator
+	var _ Communicator = &SSHCommunicator{}
 
-	// Verify pctExecCommunicator implements Communicator
-	var _ Communicator = &pctExecCommunicator{}
+	// Verify PctExecCommunicator implements Communicator
+	var _ Communicator = &PctExecCommunicator{}
 }
 
-// Test_sshCommunicator_Interface tests that sshCommunicator implements CommandRunner
+// Test_sshCommunicator_Interface tests that SSHCommunicator implements CommandRunner
 func Test_sshCommunicator_CommandRunner(t *testing.T) {
-	var _ CommandRunner = &sshCommunicator{}
-}
-
-// Test_CleanupFunctions tests that all Cleanup functions don't panic
-func Test_CleanupFunctions(t *testing.T) {
-	// Test step Cleanup functions with various state bags
-
-	steps := []struct {
-		name string
-		step multistep.Step
-	}{
-		{"stepConnect", &stepConnect{}},
-		{"stepGetCTID", &stepGetCTID{}},
-		{"stepCreateContainer", &stepCreateContainer{}},
-		{"stepMergeConfig", &stepMergeConfig{}},
-		{"stepStartContainer", &stepStartContainer{}},
-		{"stepSetupContainerComm", &stepSetupContainerComm{}},
-		{"stepBackupContainer", &stepBackupContainer{}},
-		{"stepDestroyContainer", &stepDestroyContainer{}},
-	}
-
-	for _, s := range steps {
-		t.Run(s.name, func(t *testing.T) {
-			// Test with empty state
-			state := new(multistep.BasicStateBag)
-			s.step.Cleanup(state)
-
-			// Test with SSH client in state (for stepConnect)
-			if sc, ok := s.step.(*stepConnect); ok {
-				_ = sc
-				// We can't easily add a mock ssh.Client, so just test empty state
-			}
-		})
-	}
+	var _ CommandRunner = &SSHCommunicator{}
 }
 
 // Test_sshCommunicator_UnimplementedMethods tests that unimplemented methods return errors
 func Test_sshCommunicator_UnimplementedMethods(t *testing.T) {
-	comm := &sshCommunicator{}
+	comm := &SSHCommunicator{}
 
 	// Upload should return error
 	err := comm.Upload("/dst", &bytes.Buffer{}, nil)
 	if err == nil {
-		t.Error("Expected error for sshCommunicator.Upload()")
+		t.Error("Expected error for SSHCommunicator.Upload()")
 	}
 
 	// UploadDir should return error
 	err = comm.UploadDir("/dst", "/src", nil)
 	if err == nil {
-		t.Error("Expected error for sshCommunicator.UploadDir()")
+		t.Error("Expected error for SSHCommunicator.UploadDir()")
 	}
 
 	// Download should return error
 	err = comm.Download("/src", &bytes.Buffer{})
 	if err == nil {
-		t.Error("Expected error for sshCommunicator.Download()")
+		t.Error("Expected error for SSHCommunicator.Download()")
 	}
 
 	// DownloadDir should return error
 	err = comm.DownloadDir("/src", "/dst", nil)
 	if err == nil {
-		t.Error("Expected error for sshCommunicator.DownloadDir()")
+		t.Error("Expected error for SSHCommunicator.DownloadDir()")
 	}
 }
 
 // Test_pctExecCommunicator_UnimplementedMethods tests that unimplemented methods return errors
 func Test_pctExecCommunicator_UnimplementedMethods(t *testing.T) {
-	comm := &pctExecCommunicator{parent: &mockCommandRunner{}}
+	comm := &PctExecCommunicator{parent: &testutil.MockRunner{}}
 
 	// UploadDir should return error
 	err := comm.UploadDir("/dst", "/src", nil)
 	if err == nil {
-		t.Error("Expected error for pctExecCommunicator.UploadDir()")
+		t.Error("Expected error for PctExecCommunicator.UploadDir()")
 	}
 
 	// Download should return error
 	err = comm.Download("/src", &bytes.Buffer{})
 	if err == nil {
-		t.Error("Expected error for pctExecCommunicator.Download()")
+		t.Error("Expected error for PctExecCommunicator.Download()")
 	}
 
 	// DownloadDir should return error
 	err = comm.DownloadDir("/src", "/dst", nil)
 	if err == nil {
-		t.Error("Expected error for pctExecCommunicator.DownloadDir()")
+		t.Error("Expected error for PctExecCommunicator.DownloadDir()")
 	}
 }

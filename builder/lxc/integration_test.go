@@ -13,6 +13,8 @@ import (
 
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
 	"golang.org/x/crypto/ssh"
+
+	"github.com/leoarry/packer-plugin-proxmox-lxc/builder/lxc/internal/testutil"
 )
 
 // dialProxmoxSSH opens a direct SSH connection to the Proxmox host,
@@ -256,7 +258,7 @@ func TestIntegration_FullBuild(t *testing.T) {
 		t.Logf("Warnings: %v", warnings)
 	}
 
-	ui := &testUi{}
+	ui := &testutil.UI{}
 	// A real "packer build" always supplies a non-nil Hook (even with no
 	// provisioners configured); StepProvision calls methods on it
 	// unconditionally, so passing nil here would panic.
@@ -347,7 +349,7 @@ func TestIntegration_FullBuild_TemplateMethod(t *testing.T) {
 		t.Logf("Warnings: %v", warnings)
 	}
 
-	ui := &testUi{}
+	ui := &testutil.UI{}
 	// See the note in TestIntegration_FullBuild about why nil can't be
 	// passed here.
 	rawArtifact, err := b.Run(context.Background(), ui, &packersdk.DispatchHook{})

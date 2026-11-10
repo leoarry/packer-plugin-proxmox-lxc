@@ -1,4 +1,4 @@
-package lxc
+package steps
 
 import (
 	"context"
@@ -7,20 +7,22 @@ import (
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
+
+	"github.com/leoarry/packer-plugin-proxmox-lxc/builder/lxc/internal/remote"
 )
 
-type stepStartContainer struct{}
+type StartContainer struct{}
 
-func (s *stepStartContainer) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
-	ui := state.Get("ui").(packersdk.Ui)
-	ctid := state.Get("ctid").(string)
-	comm := state.Get("communicator").(CommandRunner)
+func (s *StartContainer) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
+	ui := state.Get(StateUI).(packersdk.Ui)
+	ctid := state.Get(StateCTID).(string)
+	comm := state.Get(StateCommunicator).(remote.CommandRunner)
 
 	ui.Say(fmt.Sprintf("Starting container %s...", ctid))
 
 	err := comm.RunCommand(ctx, fmt.Sprintf("pct start %s", ctid), nil, nil)
 	if err != nil {
-		state.Put("error", fmt.Errorf("failed to start container: %w", err))
+		state.Put(StateError, fmt.Errorf("failed to start container: %w", err))
 		return multistep.ActionHalt
 	}
 
@@ -31,4 +33,4 @@ func (s *stepStartContainer) Run(ctx context.Context, state multistep.StateBag) 
 	return multistep.ActionContinue
 }
 
-func (s *stepStartContainer) Cleanup(state multistep.StateBag) {}
+func (s *StartContainer) Cleanup(state multistep.StateBag) {}

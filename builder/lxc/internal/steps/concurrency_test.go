@@ -1,4 +1,4 @@
-package lxc
+package steps
 
 import (
 	"context"
@@ -10,6 +10,9 @@ import (
 	"testing"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
+
+	"github.com/leoarry/packer-plugin-proxmox-lxc/builder/lxc/internal/config"
+	"github.com/leoarry/packer-plugin-proxmox-lxc/builder/lxc/internal/testutil"
 )
 
 // fakeProxmoxHost is a minimal, concurrency-safe stand-in for a real
@@ -73,7 +76,7 @@ func (h *fakeProxmoxHost) RunCommand(ctx context.Context, command string, stdout
 // scenario from GitHub issue #5: two "packer build" processes targeting
 // the same Proxmox host, both auto-assigning a CTID at roughly the same
 // time. Before the fix, both would get the same CTID from `pvesh get
-// /cluster/nextid` and one would fail outright in stepCreateContainer.
+// /cluster/nextid` and one would fail outright in CreateContainer.
 // With the fix, the loser of the race retries with a freshly fetched CTID
 // instead of failing the build.
 func TestConcurrentBuilds_CTIDConflict_ResolvedByRetry(t *testing.T) {
@@ -94,9 +97,9 @@ func TestConcurrentBuilds_CTIDConflict_ResolvedByRetry(t *testing.T) {
 		go func() {
 			defer wgDone.Done()
 
-			config := &Config{
+			cfg := &config.Config{
 				Template:     "local:vztmpl/ubuntu-22.04.tar.gz",
-				Unprivileged: boolPtr(true),
+				Unprivileged: testutil.BoolPtr(true),
 				Storage:      "local-lvm",
 				Memory:       512,
 				Cores:        1,
@@ -108,13 +111,13 @@ func TestConcurrentBuilds_CTIDConflict_ResolvedByRetry(t *testing.T) {
 			}
 
 			state := new(multistep.BasicStateBag)
-			state.Put("ui", &testUi{})
-			state.Put("communicator", host)
-			state.Put("config", config)
+			state.Put(StateUI, &testutil.UI{})
+			state.Put(StateCommunicator, host)
+			state.Put(StateConfig, cfg)
 
-			getStep := &stepGetCTID{}
+			getStep := &GetCTID{}
 			if action := getStep.Run(context.Background(), state); action != multistep.ActionContinue {
-				errs[i] = fmt.Errorf("stepGetCTID did not continue")
+				errs[i] = fmt.Errorf("GetCTID did not continue")
 				wgFetched.Done()
 				return
 			}
@@ -125,17 +128,17 @@ func TestConcurrentBuilds_CTIDConflict_ResolvedByRetry(t *testing.T) {
 			// like the two parallel builds in the bug report.
 			<-release
 
-			createStep := &stepCreateContainer{}
+			createStep := &CreateContainer{}
 			action := createStep.Run(context.Background(), state)
 			if action != multistep.ActionContinue {
-				if errVal, ok := state.GetOk("error"); ok {
+				if errVal, ok := state.GetOk(StateError); ok {
 					errs[i] = errVal.(error)
 				} else {
-					errs[i] = fmt.Errorf("stepCreateContainer halted with no error in state")
+					errs[i] = fmt.Errorf("CreateContainer halted with no error in state")
 				}
 				return
 			}
-			results[i] = state.Get("ctid").(string)
+			results[i] = state.Get(StateCTID).(string)
 		}()
 	}
 

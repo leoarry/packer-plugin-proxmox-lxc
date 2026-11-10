@@ -6,6 +6,10 @@ import (
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
+
+	"github.com/leoarry/packer-plugin-proxmox-lxc/builder/lxc/internal/remote"
+	"github.com/leoarry/packer-plugin-proxmox-lxc/builder/lxc/internal/steps"
+	"github.com/leoarry/packer-plugin-proxmox-lxc/builder/lxc/internal/testutil"
 )
 
 func TestBuilder_Implements(t *testing.T) {
@@ -170,8 +174,8 @@ type mockStepConnect struct {
 }
 
 func (s *mockStepConnect) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
-	state.Put("communicator", &mockCommandRunner{})
-	state.Put("proxmox_comm", &mockCommandRunner{})
+	state.Put(steps.StateCommunicator, &testutil.MockRunner{})
+	state.Put(steps.StateProxmoxComm, &testutil.MockRunner{})
 	return s.action
 }
 func (s *mockStepConnect) Cleanup(state multistep.StateBag) {}
@@ -182,7 +186,7 @@ type mockStepGetCTID struct {
 }
 
 func (s *mockStepGetCTID) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
-	state.Put("ctid", s.ctid)
+	state.Put(steps.StateCTID, s.ctid)
 	return s.action
 }
 func (s *mockStepGetCTID) Cleanup(state multistep.StateBag) {}
@@ -219,10 +223,10 @@ type mockStepSetupContainerComm struct {
 }
 
 func (s *mockStepSetupContainerComm) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
-	// Replace communicator with pctExecCommunicator
-	parentComm := state.Get("communicator").(CommandRunner)
-	state.Put("communicator", &pctExecCommunicator{ctid: "100", parent: parentComm})
-	state.Put("proxmox_comm", parentComm)
+	// Replace communicator with a remote.PctExecCommunicator
+	parentComm := state.Get(steps.StateCommunicator).(remote.CommandRunner)
+	state.Put(steps.StateCommunicator, remote.NewPctExecCommunicator("100", parentComm))
+	state.Put(steps.StateProxmoxComm, parentComm)
 	return s.action
 }
 func (s *mockStepSetupContainerComm) Cleanup(state multistep.StateBag) {}
@@ -244,10 +248,10 @@ type mockStepBackupContainer struct {
 
 func (s *mockStepBackupContainer) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	if s.backupPath != "" {
-		state.Put("backup_path", s.backupPath)
+		state.Put(steps.StateBackupPath, s.backupPath)
 	}
 	if s.backupName != "" {
-		state.Put("backup_name", s.backupName)
+		state.Put(steps.StateBackupName, s.backupName)
 	}
 	return s.action
 }
@@ -260,7 +264,7 @@ type mockStepCreateTemplate struct {
 
 func (s *mockStepCreateTemplate) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	if s.templated {
-		state.Put("container_templated", true)
+		state.Put(steps.StateContainerTemplated, true)
 	}
 	return s.action
 }
@@ -279,7 +283,7 @@ func (s *mockStepDestroyContainer) Cleanup(state multistep.StateBag) {}
 type errorStep struct{}
 
 func (s *errorStep) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
-	state.Put("error", context.Canceled)
+	state.Put(steps.StateError, context.Canceled)
 	return multistep.ActionContinue
 }
 func (s *errorStep) Cleanup(state multistep.StateBag) {}
@@ -311,7 +315,7 @@ func TestBuilder_Run_Success(t *testing.T) {
 	}
 	b.setSteps(mockSteps)
 
-	ui := &testUi{}
+	ui := &testutil.UI{}
 	artifact, err := b.Run(context.Background(), ui, nil)
 	if err != nil {
 		t.Fatalf("Run() returned error: %v", err)
@@ -357,7 +361,7 @@ func TestBuilder_Run_TemplateMethod(t *testing.T) {
 	}
 	b.setSteps(mockSteps)
 
-	ui := &testUi{}
+	ui := &testutil.UI{}
 	artifact, err := b.Run(context.Background(), ui, nil)
 	if err != nil {
 		t.Fatalf("Run() returned error: %v", err)
@@ -401,7 +405,7 @@ func TestBuilder_Run_TemplateMethod_NotTemplated(t *testing.T) {
 	}
 	b.setSteps(mockSteps)
 
-	ui := &testUi{}
+	ui := &testutil.UI{}
 	_, err = b.Run(context.Background(), ui, nil)
 	if err == nil {
 		t.Fatal("Expected error for container not templated, got nil")
@@ -434,7 +438,7 @@ func TestBuilder_Run_NoBackupPath(t *testing.T) {
 	}
 	b.setSteps(mockSteps)
 
-	ui := &testUi{}
+	ui := &testutil.UI{}
 	_, err = b.Run(context.Background(), ui, nil)
 	if err == nil {
 		t.Fatal("Expected error for missing backup_path, got nil")
@@ -465,7 +469,7 @@ func TestBuilder_Run_ErrorInState(t *testing.T) {
 	}
 	b.setSteps(mockSteps)
 
-	ui := &testUi{}
+	ui := &testutil.UI{}
 	artifact, err := b.Run(context.Background(), ui, nil)
 	if artifact != nil {
 		t.Errorf("Expected nil artifact on error, got %v", artifact)
@@ -491,7 +495,7 @@ func TestBuilder_Run_WithErrorInState(t *testing.T) {
 
 	b.setSteps([]multistep.Step{&errorStep{}})
 
-	ui := &testUi{}
+	ui := &testutil.UI{}
 	_, err = b.Run(context.Background(), ui, nil)
 	if err == nil {
 		t.Fatal("Expected error from state, got nil")

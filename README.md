@@ -201,7 +201,7 @@ details as variables to `test-integration-full`:
 ```bash
 make test-integration-full \
   PROXMOX_HOST=10.0.0.5 PROXMOX_USER=root PROXMOX_PASSWORD=secret \
-  PROXMOX_TEMPLATE=local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst
+  PROXMOX_TEMPLATE=local:vztmpl/debian-13-standard_13.6-1_amd64.tar.zst
 ```
 
 Notes:

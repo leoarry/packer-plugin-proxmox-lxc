@@ -1,4 +1,4 @@
-package lxc
+package steps
 
 import (
 	"bytes"
@@ -10,6 +10,9 @@ import (
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
+
+	"github.com/leoarry/packer-plugin-proxmox-lxc/builder/lxc/internal/config"
+	"github.com/leoarry/packer-plugin-proxmox-lxc/builder/lxc/internal/remote"
 )
 
 // maxCTIDConflictRetries bounds how many times an auto-assigned CTID is
@@ -17,21 +20,21 @@ import (
 // same Proxmox host (see fetchNextCTID for why this race is possible).
 const maxCTIDConflictRetries = 5
 
-type stepCreateContainer struct{}
+type CreateContainer struct{}
 
-func (s *stepCreateContainer) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
-	ui := state.Get("ui").(packersdk.Ui)
-	config := state.Get("config").(*Config)
-	comm := state.Get("communicator").(CommandRunner)
-	ctid := state.Get("ctid").(string)
-	autoAssigned := config.CTID == ""
+func (s *CreateContainer) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
+	ui := state.Get(StateUI).(packersdk.Ui)
+	cfg := state.Get(StateConfig).(*config.Config)
+	comm := state.Get(StateCommunicator).(remote.CommandRunner)
+	ctid := state.Get(StateCTID).(string)
+	autoAssigned := cfg.CTID == ""
 
 	for attempt := 0; ; attempt++ {
 		err := comm.RunCommand(ctx, fmt.Sprintf("pct status %s", ctid), nil, nil)
 		if err == nil {
 			if !autoAssigned {
 				ui.Say(fmt.Sprintf("Container %s already exists, reusing", ctid))
-				state.Put("container_reused", true)
+				state.Put(StateContainerReused, true)
 				return multistep.ActionContinue
 			}
 
@@ -48,22 +51,22 @@ func (s *stepCreateContainer) Run(ctx context.Context, state multistep.StateBag)
 
 				newCTID, ferr := fetchNextCTID(ctx, comm)
 				if ferr != nil {
-					state.Put("error", fmt.Errorf("CTID %s is already in use and failed to get a new CTID: %w", ctid, ferr))
+					state.Put(StateError, fmt.Errorf("CTID %s is already in use and failed to get a new CTID: %w", ctid, ferr))
 					return multistep.ActionHalt
 				}
 				ctid = newCTID
-				state.Put("ctid", ctid)
+				state.Put(StateCTID, ctid)
 				continue
 			}
 
-			state.Put("error", fmt.Errorf("CTID %s is already in use after %d retries", ctid, maxCTIDConflictRetries))
+			state.Put(StateError, fmt.Errorf("CTID %s is already in use after %d retries", ctid, maxCTIDConflictRetries))
 			return multistep.ActionHalt
 		}
 
 		ui.Say(fmt.Sprintf("Creating container %s...", ctid))
 
 		unprivileged := "1"
-		if !config.IsUnprivileged() {
+		if !cfg.IsUnprivileged() {
 			unprivileged = "0"
 		}
 
@@ -71,23 +74,23 @@ func (s *stepCreateContainer) Run(ctx context.Context, state multistep.StateBag)
 		cmd := fmt.Sprintf(
 			"pct create %s %s --unprivileged %s --features %s --hostname builder-%s --storage %s --rootfs %s:%s --memory %d --cores %d --net0 %s --password '%s'",
 			ctid,
-			config.Template,
+			cfg.Template,
 			unprivileged,
-			config.Features,
+			cfg.Features,
 			ctid,
-			config.Storage,
-			config.Storage,
-			config.RootfsSize,
-			config.Memory,
-			config.Cores,
-			config.NetworkConfig(),
-			config.RootPassword,
+			cfg.Storage,
+			cfg.Storage,
+			cfg.RootfsSize,
+			cfg.Memory,
+			cfg.Cores,
+			cfg.NetworkConfig(),
+			cfg.RootPassword,
 		)
 
 		var stderr bytes.Buffer
 		err = comm.RunCommand(ctx, cmd, nil, &stderr)
 		if err == nil {
-			state.Put("container_reused", false)
+			state.Put(StateContainerReused, false)
 			ui.Say(fmt.Sprintf("Container %s created", ctid))
 			return multistep.ActionContinue
 		}
@@ -102,15 +105,15 @@ func (s *stepCreateContainer) Run(ctx context.Context, state multistep.StateBag)
 
 			newCTID, ferr := fetchNextCTID(ctx, comm)
 			if ferr != nil {
-				state.Put("error", fmt.Errorf("pct create failed: %w (and failed to get a new CTID: %v)", err, ferr))
+				state.Put(StateError, fmt.Errorf("pct create failed: %w (and failed to get a new CTID: %v)", err, ferr))
 				return multistep.ActionHalt
 			}
 			ctid = newCTID
-			state.Put("ctid", ctid)
+			state.Put(StateCTID, ctid)
 			continue
 		}
 
-		state.Put("error", fmt.Errorf("pct create failed: %w", err))
+		state.Put(StateError, fmt.Errorf("pct create failed: %w", err))
 		return multistep.ActionHalt
 	}
 }
@@ -131,37 +134,37 @@ func ctidRetryBackoff(attempt int) time.Duration {
 	return base + jitter
 }
 
-func (s *stepCreateContainer) Cleanup(state multistep.StateBag) {
-	// If container was already destroyed by stepDestroyContainer, skip cleanup.
-	if _, ok := state.GetOk("container_destroyed"); ok {
+func (s *CreateContainer) Cleanup(state multistep.StateBag) {
+	// If container was already destroyed by DestroyContainer, skip cleanup.
+	if _, ok := state.GetOk(StateContainerDestroyed); ok {
 		return
 	}
 
 	// If container was reused (existed before our build), don't destroy it.
-	if reused, ok := state.GetOk("container_reused"); ok && reused.(bool) {
+	if reused, ok := state.GetOk(StateContainerReused); ok && reused.(bool) {
 		return
 	}
 
 	// If container was successfully converted to a Proxmox CT template,
 	// it *is* the artifact — don't destroy it.
-	if templated, ok := state.GetOk("container_templated"); ok && templated.(bool) {
+	if templated, ok := state.GetOk(StateContainerTemplated); ok && templated.(bool) {
 		return
 	}
 
-	ctid, ok := state.GetOk("ctid")
+	ctid, ok := state.GetOk(StateCTID)
 	if !ok {
 		return
 	}
 	ctidStr := ctid.(string)
 
 	// Get the command runner for the Proxmox host.
-	// After stepSetupContainerComm, the host communicator is saved as "proxmox_comm".
-	// Before that, the communicator in "communicator" is the sshCommunicator.
-	var cmdRunner CommandRunner
-	if comm, ok := state.GetOk("proxmox_comm"); ok {
-		cmdRunner = comm.(CommandRunner)
-	} else if comm, ok := state.GetOk("communicator"); ok {
-		if cr, ok := comm.(CommandRunner); ok {
+	// After SetupContainerComm, the host communicator is saved as "proxmox_comm".
+	// Before that, the communicator in "communicator" is the remote.SSHCommunicator.
+	var cmdRunner remote.CommandRunner
+	if comm, ok := state.GetOk(StateProxmoxComm); ok {
+		cmdRunner = comm.(remote.CommandRunner)
+	} else if comm, ok := state.GetOk(StateCommunicator); ok {
+		if cr, ok := comm.(remote.CommandRunner); ok {
 			cmdRunner = cr
 		}
 	}
@@ -169,7 +172,7 @@ func (s *stepCreateContainer) Cleanup(state multistep.StateBag) {
 		return
 	}
 
-	if ui, ok := state.GetOk("ui"); ok {
+	if ui, ok := state.GetOk(StateUI); ok {
 		ui.(packersdk.Ui).Say(fmt.Sprintf("Cleaning up container %s due to failure...", ctidStr))
 	}
 

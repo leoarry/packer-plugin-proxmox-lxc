@@ -1,10 +1,12 @@
-package lxc
+package config
 
 import (
 	"fmt"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/leoarry/packer-plugin-proxmox-lxc/builder/lxc/internal/testutil"
 )
 
 func TestConfig_Prepare(t *testing.T) {
@@ -203,7 +205,7 @@ func TestConfig_Prepare(t *testing.T) {
 				Cores:        2,
 				RootfsSize:   "2",
 				SSHTimeout:   "5m",
-				Unprivileged: boolPtr(false),
+				Unprivileged: testutil.BoolPtr(false),
 			},
 			wantErr: false,
 		},
@@ -325,7 +327,7 @@ func TestConfig_Prepare_DefaultTagsMatchAppliedDefaults(t *testing.T) {
 		}
 
 		fv := rv.Field(i)
-		if fv.Kind() == reflect.Ptr {
+		if fv.Kind() == reflect.Pointer {
 			if fv.IsNil() {
 				t.Errorf("field %s: has default tag %q but is nil after Prepare()", field.Name, wantStr)
 				continue
@@ -858,12 +860,12 @@ func TestBackupCompressionExt(t *testing.T) {
 		"zstd": "tar.zst",
 	}
 
-	if len(backupCompressionExt) != len(want) {
-		t.Fatalf("backupCompressionExt has %d entries, want %d", len(backupCompressionExt), len(want))
+	if len(BackupCompressionExt) != len(want) {
+		t.Fatalf("BackupCompressionExt has %d entries, want %d", len(BackupCompressionExt), len(want))
 	}
 	for algo, wantExt := range want {
-		if ext := backupCompressionExt[algo]; ext != wantExt {
-			t.Errorf("backupCompressionExt[%q] = %q, want %q", algo, ext, wantExt)
+		if ext := BackupCompressionExt[algo]; ext != wantExt {
+			t.Errorf("BackupCompressionExt[%q] = %q, want %q", algo, ext, wantExt)
 		}
 	}
 }

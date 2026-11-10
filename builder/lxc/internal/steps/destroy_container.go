@@ -1,4 +1,4 @@
-package lxc
+package steps
 
 import (
 	"context"
@@ -6,14 +6,16 @@ import (
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	packersdk "github.com/hashicorp/packer-plugin-sdk/packer"
+
+	"github.com/leoarry/packer-plugin-proxmox-lxc/builder/lxc/internal/remote"
 )
 
-type stepDestroyContainer struct{}
+type DestroyContainer struct{}
 
-func (s *stepDestroyContainer) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
-	ui := state.Get("ui").(packersdk.Ui)
-	ctid := state.Get("ctid").(string)
-	comm := state.Get("proxmox_comm").(CommandRunner)
+func (s *DestroyContainer) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
+	ui := state.Get(StateUI).(packersdk.Ui)
+	ctid := state.Get(StateCTID).(string)
+	comm := state.Get(StateProxmoxComm).(remote.CommandRunner)
 
 	ui.Say(fmt.Sprintf("Stopping container %s...", ctid))
 	err := comm.RunCommand(ctx, fmt.Sprintf("pct stop %s", ctid), nil, nil)
@@ -26,7 +28,7 @@ func (s *stepDestroyContainer) Run(ctx context.Context, state multistep.StateBag
 	if err != nil {
 		ui.Error(fmt.Sprintf("Failed to destroy container: %v", err))
 	} else {
-		state.Put("container_destroyed", true)
+		state.Put(StateContainerDestroyed, true)
 	}
 
 	_ = comm.RunCommand(ctx, fmt.Sprintf("rm -f /tmp/vzdump-lxc-%s-*.log 2>/dev/null || true", ctid), nil, nil)
@@ -34,4 +36,4 @@ func (s *stepDestroyContainer) Run(ctx context.Context, state multistep.StateBag
 	return multistep.ActionContinue
 }
 
-func (s *stepDestroyContainer) Cleanup(state multistep.StateBag) {}
+func (s *DestroyContainer) Cleanup(state multistep.StateBag) {}

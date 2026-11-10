@@ -1,4 +1,6 @@
-package lxc
+// Package remote runs commands on the Proxmox host over SSH, and inside LXC
+// containers on it via pct exec.
+package remote
 
 import (
 	"context"
@@ -11,8 +13,14 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// CommandRunner runs a single command and streams its output. It is implemented
+// by SSHCommunicator and can be mocked for testing.
+type CommandRunner interface {
+	RunCommand(ctx context.Context, command string, stdout, stderr io.Writer) error
+}
+
 // Communicator interface defines the methods for communicating with Proxmox host and containers.
-// Both sshCommunicator and pctExecCommunicator implement this interface.
+// Both SSHCommunicator and PctExecCommunicator implement this interface.
 type Communicator interface {
 	Start(ctx context.Context, cmd *packersdk.RemoteCmd) error
 	Wait(*packersdk.RemoteCmd) error
@@ -22,16 +30,22 @@ type Communicator interface {
 	DownloadDir(src string, dst string, exclude []string) error
 }
 
-// sshCommunicator executes commands on the Proxmox host via SSH.
-type sshCommunicator struct {
+// SSHCommunicator executes commands on the Proxmox host via SSH.
+type SSHCommunicator struct {
 	client SSHSessionProvider
 	cmdErr error
 	done   chan struct{}
 }
 
+// NewSSHCommunicator returns a communicator that runs commands on the host
+// behind client.
+func NewSSHCommunicator(client *ssh.Client) *SSHCommunicator {
+	return &SSHCommunicator{client: &sshClientWrapper{client: client}}
+}
+
 // RunCommand executes a command on the Proxmox host.
 // This method implements the CommandRunner interface.
-func (c *sshCommunicator) RunCommand(ctx context.Context, command string, stdout, stderr io.Writer) error {
+func (c *SSHCommunicator) RunCommand(ctx context.Context, command string, stdout, stderr io.Writer) error {
 	session, err := c.client.NewSession()
 	if err != nil {
 		return fmt.Errorf("failed to create SSH session: %w", err)
@@ -57,7 +71,7 @@ func (c *sshCommunicator) RunCommand(ctx context.Context, command string, stdout
 	return nil
 }
 
-func (c *sshCommunicator) Start(ctx context.Context, cmd *packersdk.RemoteCmd) error {
+func (c *SSHCommunicator) Start(ctx context.Context, cmd *packersdk.RemoteCmd) error {
 	c.cmdErr = nil
 	c.done = make(chan struct{})
 
@@ -98,36 +112,42 @@ func (c *sshCommunicator) Start(ctx context.Context, cmd *packersdk.RemoteCmd) e
 	return nil
 }
 
-func (c *sshCommunicator) Wait(*packersdk.RemoteCmd) error {
+func (c *SSHCommunicator) Wait(*packersdk.RemoteCmd) error {
 	<-c.done
 	return c.cmdErr
 }
 
-func (c *sshCommunicator) Upload(dst string, src io.Reader, fi *os.FileInfo) error {
+func (c *SSHCommunicator) Upload(dst string, src io.Reader, fi *os.FileInfo) error {
 	return fmt.Errorf("Upload not implemented, use pct push instead")
 }
 
-func (c *sshCommunicator) UploadDir(dst string, src string, exclude []string) error {
+func (c *SSHCommunicator) UploadDir(dst string, src string, exclude []string) error {
 	return fmt.Errorf("UploadDir not implemented")
 }
 
-func (c *sshCommunicator) Download(src string, dst io.Writer) error {
+func (c *SSHCommunicator) Download(src string, dst io.Writer) error {
 	return fmt.Errorf("Download not implemented")
 }
 
-func (c *sshCommunicator) DownloadDir(src string, dst string, exclude []string) error {
+func (c *SSHCommunicator) DownloadDir(src string, dst string, exclude []string) error {
 	return fmt.Errorf("DownloadDir not implemented")
 }
 
-// pctExecCommunicator runs commands inside an LXC container via pct exec.
-type pctExecCommunicator struct {
+// PctExecCommunicator runs commands inside an LXC container via pct exec.
+type PctExecCommunicator struct {
 	ctid   string
 	parent CommandRunner
 	cmdErr error
 	done   chan struct{}
 }
 
-func (c *pctExecCommunicator) Start(ctx context.Context, cmd *packersdk.RemoteCmd) error {
+// NewPctExecCommunicator returns a communicator that runs commands inside
+// container ctid, through parent (a runner on the Proxmox host).
+func NewPctExecCommunicator(ctid string, parent CommandRunner) *PctExecCommunicator {
+	return &PctExecCommunicator{ctid: ctid, parent: parent}
+}
+
+func (c *PctExecCommunicator) Start(ctx context.Context, cmd *packersdk.RemoteCmd) error {
 	escaped := strings.ReplaceAll(cmd.Command, "'", "'\"'\"'")
 	pctCmd := fmt.Sprintf("pct exec %s -- bash -c '%s'", c.ctid, escaped)
 
@@ -152,12 +172,12 @@ func (c *pctExecCommunicator) Start(ctx context.Context, cmd *packersdk.RemoteCm
 	return nil
 }
 
-func (c *pctExecCommunicator) Wait(*packersdk.RemoteCmd) error {
+func (c *PctExecCommunicator) Wait(*packersdk.RemoteCmd) error {
 	<-c.done
 	return c.cmdErr
 }
 
-func (c *pctExecCommunicator) Upload(dst string, src io.Reader, fi *os.FileInfo) error {
+func (c *PctExecCommunicator) Upload(dst string, src io.Reader, fi *os.FileInfo) error {
 	data, err := io.ReadAll(src)
 	if err != nil {
 		return fmt.Errorf("failed to read upload source: %w", err)
@@ -176,14 +196,14 @@ func (c *pctExecCommunicator) Upload(dst string, src io.Reader, fi *os.FileInfo)
 	return nil
 }
 
-func (c *pctExecCommunicator) UploadDir(dst string, src string, exclude []string) error {
+func (c *PctExecCommunicator) UploadDir(dst string, src string, exclude []string) error {
 	return fmt.Errorf("UploadDir not implemented for pct exec communicator")
 }
 
-func (c *pctExecCommunicator) Download(src string, dst io.Writer) error {
+func (c *PctExecCommunicator) Download(src string, dst io.Writer) error {
 	return fmt.Errorf("Download not implemented for pct exec communicator")
 }
 
-func (c *pctExecCommunicator) DownloadDir(src string, dst string, exclude []string) error {
+func (c *PctExecCommunicator) DownloadDir(src string, dst string, exclude []string) error {
 	return fmt.Errorf("DownloadDir not implemented for pct exec communicator")
 }

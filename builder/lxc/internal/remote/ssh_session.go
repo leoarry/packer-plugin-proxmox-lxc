@@ -1,8 +1,9 @@
-package lxc
+package remote
 
 import (
-	"golang.org/x/crypto/ssh"
 	"io"
+
+	"golang.org/x/crypto/ssh"
 )
 
 // SSHSession abstracts an SSH session for testability.
