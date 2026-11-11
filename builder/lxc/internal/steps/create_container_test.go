@@ -594,3 +594,47 @@ func TestStepCreateContainer_Cleanup_ScriptFailure(t *testing.T) {
 		}
 	}
 }
+
+func TestStepCreateContainer_PrivilegedOCIFailureHint(t *testing.T) {
+	tests := []struct {
+		name         string
+		unprivileged bool
+		stderr       string
+		wantHint     bool
+	}{
+		{"privileged setgid failure", false, "unable to create CT 1026 - setgid(0): Invalid argument", true},
+		{"privileged generic invalid argument", false, "unable to create CT 123 - Invalid argument", true},
+		{"privileged unrelated failure", false, "storage 'foo' does not exist", false},
+		{"unprivileged invalid argument", true, "unable to create CT 123 - Invalid argument", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Config{
+				Unprivileged: testutil.BoolPtr(tt.unprivileged),
+				CTID:         "1026",
+				Template:     "local:vztmpl/alpine_latest.tar",
+			}
+			comm := &testutil.MockRunner{
+				Outputs: []string{"", ""},
+				Stderrs: []string{"", tt.stderr},
+				Errors:  []error{&someError{msg: "container not found"}, &someError{msg: "exit status 255"}},
+			}
+			state := new(multistep.BasicStateBag)
+			state.Put(StateConfig, cfg)
+			state.Put(StateUI, &testutil.UI{})
+			state.Put(StateCommunicator, comm)
+			state.Put(StateCTID, "1026")
+
+			if action := (&CreateContainer{}).Run(context.Background(), state); action != multistep.ActionHalt {
+				t.Fatalf("Expected ActionHalt, got %v", action)
+			}
+			err := state.Get(StateError).(error)
+			if !strings.Contains(err.Error(), tt.stderr) {
+				t.Errorf("Expected error to include stderr %q, got: %v", tt.stderr, err)
+			}
+			if got := strings.Contains(err.Error(), privilegedOCIHint); got != tt.wantHint {
+				t.Errorf("hint present = %v, want %v; error: %v", got, tt.wantHint, err)
+			}
+		})
+	}
+}
