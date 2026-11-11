@@ -190,6 +190,10 @@ described.
 
 - `unprivileged` (bool) - Create an unprivileged container.
   Default: `true`
+  Proxmox VE cannot create privileged containers (`unprivileged = false`)
+  from OCI images: `pct create` fails with `Invalid argument` (e.g.
+  `setgid(0): Invalid argument`). Use a standard LXC template if the
+  container must be privileged.
 
 - `vlan` (int) - VLAN tag for the container's network bridge, between `1`
   and `4094`. If not set, the interface is not VLAN-tagged.

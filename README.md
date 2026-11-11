@@ -127,7 +127,7 @@ packer build template.pkr.hcl
 | `memory` | int | `2048` | Memory in MB |
 | `cores` | int | `2` | Number of CPU cores |
 | `root_password` | string | `"changeme"` | Root password for the container |
-| `unprivileged` | bool | `true` | Create unprivileged container |
+| `unprivileged` | bool | `true` | Create unprivileged container. `false` is not supported by Proxmox for OCI images, use a standard LXC template instead |
 | `features` | string | `"nesting=1"` | LXC features (e.g., `nesting=1,keyctl=1`) |
 | `rootfs_size` | string | `"8"` | Root filesystem size in GB |
 | `backup_method` | string | `"vzdump"` | How to finalize the build: `"vzdump"` (backup file, container destroyed) or `"template"` (converts the container itself into a Proxmox CT template via `pct template`, container kept) |

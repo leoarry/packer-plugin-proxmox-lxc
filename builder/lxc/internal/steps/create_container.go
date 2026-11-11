@@ -116,6 +116,9 @@ func (s *CreateContainer) Run(ctx context.Context, state multistep.StateBag) mul
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
 			err = fmt.Errorf("%w: %s", err, msg)
 		}
+		if !cfg.IsUnprivileged() && isPrivilegedOCIFailure(stderr.String()) {
+			err = fmt.Errorf("%w\n%s", err, privilegedOCIHint)
+		}
 		state.Put(StateError, fmt.Errorf("pct create failed: %w", err))
 		return multistep.ActionHalt
 	}
@@ -126,6 +129,23 @@ func (s *CreateContainer) Run(ctx context.Context, state multistep.StateBag) mul
 // exists") rather than some other, non-retryable failure.
 func isCTIDConflict(stderr string) bool {
 	return strings.Contains(strings.ToLower(stderr), "already exists")
+}
+
+// privilegedOCIHint explains the most likely cause of an "Invalid argument"
+// failure when creating a privileged container. Proxmox VE's OCI image
+// import extracts the image inside a user namespace even when the ID map is
+// empty (as it always is for a privileged container), which fails with e.g.
+// "unable to create CT 1026 - setgid(0): Invalid argument". This is an
+// upstream Proxmox limitation, not something the plugin can work around.
+// See https://github.com/leoarry/packer-plugin-proxmox-lxc/issues/2.
+const privilegedOCIHint = "hint: Proxmox VE cannot create privileged containers from OCI images " +
+	"(upstream limitation). Set unprivileged = true, or use a standard LXC template " +
+	"(e.g. from `pveam`) if the container must be privileged."
+
+// isPrivilegedOCIFailure reports whether a `pct create` failure for a
+// privileged container matches the known OCI-import failure mode.
+func isPrivilegedOCIFailure(stderr string) bool {
+	return strings.Contains(strings.ToLower(stderr), "invalid argument")
 }
 
 // ctidRetryBackoff returns a short, jittered delay before retrying with a
