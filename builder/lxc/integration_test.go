@@ -34,7 +34,12 @@ func dialProxmoxSSH(host string, port int, user, password, keyPath string) (*ssh
 		if err != nil {
 			return nil, fmt.Errorf("failed to read SSH key: %w", err)
 		}
-		signer, err := ssh.ParsePrivateKey(keyData)
+		var signer ssh.Signer
+		if passphrase := os.Getenv("PROXMOX_KEY_PASSPHRASE"); passphrase != "" {
+			signer, err = ssh.ParsePrivateKeyWithPassphrase(keyData, []byte(passphrase))
+		} else {
+			signer, err = ssh.ParsePrivateKey(keyData)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse SSH key: %w", err)
 		}
@@ -119,6 +124,8 @@ func removeFileOnHost(t *testing.T, host string, port int, user, password, keyPa
 //   - PROXMOX_USER: SSH username (e.g., root@pam)
 //   - PROXMOX_PASSWORD: SSH password
 //   - PROXMOX_KEY_PATH: Path to SSH key (alternative to password)
+//   - PROXMOX_KEY_PASSPHRASE: Passphrase, if PROXMOX_KEY_PATH is encrypted
+//     (optional; also used by the builds and the SSH tests in internal/steps)
 func TestIntegration_Connect(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
@@ -212,14 +219,15 @@ func TestIntegration_FullBuild(t *testing.T) {
 	// avoid leaving real files behind on your cluster across repeated
 	// local runs.
 	config := map[string]interface{}{
-		"ssh_host":     host,
-		"ssh_user":     user,
-		"ssh_password": password,
-		"ssh_key_path": keyPath,
-		"template":     template,
-		"storage":      os.Getenv("PROXMOX_STORAGE"),
-		"backup_dir":   "/var/lib/vz/template/cache",
-		"rootfs_size":  "2",
+		"ssh_host":           host,
+		"ssh_user":           user,
+		"ssh_password":       password,
+		"ssh_key_path":       keyPath,
+		"ssh_key_passphrase": os.Getenv("PROXMOX_KEY_PASSPHRASE"),
+		"template":           template,
+		"storage":            os.Getenv("PROXMOX_STORAGE"),
+		"backup_dir":         "/var/lib/vz/template/cache",
+		"rootfs_size":        "2",
 	}
 
 	if ctid := os.Getenv("PROXMOX_CTID"); ctid != "" {
@@ -327,14 +335,15 @@ func TestIntegration_FullBuild_TemplateMethod(t *testing.T) {
 	// This creates and provisions a real container on the target Proxmox
 	// host and converts it into a CT template; see the cleanup note above.
 	config := map[string]interface{}{
-		"ssh_host":      host,
-		"ssh_user":      os.Getenv("PROXMOX_USER"),
-		"ssh_password":  os.Getenv("PROXMOX_PASSWORD"),
-		"ssh_key_path":  os.Getenv("PROXMOX_KEY_PATH"),
-		"template":      template,
-		"storage":       os.Getenv("PROXMOX_STORAGE"),
-		"rootfs_size":   "2",
-		"backup_method": "template",
+		"ssh_host":           host,
+		"ssh_user":           os.Getenv("PROXMOX_USER"),
+		"ssh_password":       os.Getenv("PROXMOX_PASSWORD"),
+		"ssh_key_path":       os.Getenv("PROXMOX_KEY_PATH"),
+		"ssh_key_passphrase": os.Getenv("PROXMOX_KEY_PASSPHRASE"),
+		"template":           template,
+		"storage":            os.Getenv("PROXMOX_STORAGE"),
+		"rootfs_size":        "2",
+		"backup_method":      "template",
 	}
 	if ctid := os.Getenv("PROXMOX_CTID"); ctid != "" {
 		config["ctid"] = ctid

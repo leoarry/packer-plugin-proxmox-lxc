@@ -334,8 +334,10 @@ func TestStepCreateContainer_NonConflictError_NoRetry(t *testing.T) {
 	if action != multistep.ActionHalt {
 		t.Errorf("Expected ActionHalt, got %v", action)
 	}
-	if _, ok := state.GetOk(StateError); !ok {
+	if err, ok := state.GetOk(StateError); !ok {
 		t.Errorf("Expected error in state")
+	} else if !strings.Contains(err.(error).Error(), "disk quota exceeded") {
+		t.Errorf("Expected pct's stderr in the error, got %q", err)
 	}
 	// No retry: only the status + create calls, no CTID re-fetch.
 	if len(comm.Calls) != 2 {

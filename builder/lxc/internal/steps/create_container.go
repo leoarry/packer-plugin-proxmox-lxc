@@ -113,6 +113,9 @@ func (s *CreateContainer) Run(ctx context.Context, state multistep.StateBag) mul
 			continue
 		}
 
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			err = fmt.Errorf("%w: %s", err, msg)
+		}
 		state.Put(StateError, fmt.Errorf("pct create failed: %w", err))
 		return multistep.ActionHalt
 	}

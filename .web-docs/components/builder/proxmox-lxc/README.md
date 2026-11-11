@@ -173,8 +173,16 @@ described.
 - `ssh_port` (int) - SSH port for connecting to the Proxmox host.
   Default: `22`
 
-- `ssh_timeout` (string) - Timeout for SSH connections during provisioning.
-  Example: `"5m"`.
+- `ssh_key_passphrase` (string) - Passphrase for an encrypted `ssh_key_path`.
+
+- `ssh_known_hosts_file` (string) - Path to a `known_hosts` file used to verify
+  the Proxmox host key. The build fails if the host is missing from the file or
+  its key doesn't match. If unset, the host key is not verified and a warning is
+  printed. You can add the host with `ssh-keyscan -H <host> >> <file>` (check the
+  fingerprint first). Example: `"/home/me/.ssh/known_hosts"`.
+
+- `ssh_timeout` (string) - Timeout for establishing the SSH connection to the
+  Proxmox host. Example: `"5m"`.
   Default: `"5m"`
 
 - `storage` (string) - Storage backend for the container.

@@ -23,6 +23,8 @@ type FlatConfig struct {
 	SSHUser             *string           `mapstructure:"ssh_user" required:"true" cty:"ssh_user" hcl:"ssh_user"`
 	SSHPassword         *string           `mapstructure:"ssh_password" cty:"ssh_password" hcl:"ssh_password"`
 	SSHKeyPath          *string           `mapstructure:"ssh_key_path" cty:"ssh_key_path" hcl:"ssh_key_path"`
+	SSHKeyPassphrase    *string           `mapstructure:"ssh_key_passphrase" cty:"ssh_key_passphrase" hcl:"ssh_key_passphrase"`
+	SSHKnownHostsFile   *string           `mapstructure:"ssh_known_hosts_file" cty:"ssh_known_hosts_file" hcl:"ssh_known_hosts_file"`
 	Template            *string           `mapstructure:"template" required:"true" cty:"template" hcl:"template"`
 	Storage             *string           `mapstructure:"storage" default:"local-lvm" cty:"storage" hcl:"storage"`
 	Bridge              *string           `mapstructure:"bridge" default:"vmbr0" cty:"bridge" hcl:"bridge"`
@@ -72,6 +74,8 @@ func (*FlatConfig) HCL2Spec() map[string]hcldec.Spec {
 		"ssh_user":                   &hcldec.AttrSpec{Name: "ssh_user", Type: cty.String, Required: false},
 		"ssh_password":               &hcldec.AttrSpec{Name: "ssh_password", Type: cty.String, Required: false},
 		"ssh_key_path":               &hcldec.AttrSpec{Name: "ssh_key_path", Type: cty.String, Required: false},
+		"ssh_key_passphrase":         &hcldec.AttrSpec{Name: "ssh_key_passphrase", Type: cty.String, Required: false},
+		"ssh_known_hosts_file":       &hcldec.AttrSpec{Name: "ssh_known_hosts_file", Type: cty.String, Required: false},
 		"template":                   &hcldec.AttrSpec{Name: "template", Type: cty.String, Required: false},
 		"storage":                    &hcldec.AttrSpec{Name: "storage", Type: cty.String, Required: false},
 		"bridge":                     &hcldec.AttrSpec{Name: "bridge", Type: cty.String, Required: false},
